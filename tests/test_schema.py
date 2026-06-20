@@ -1,5 +1,9 @@
 from pydantic import ValidationError
 import pytest
+import sys
+import os
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.schema import Reference, Report
 
@@ -40,3 +44,5 @@ def test_report_missing_fields():
     # Missing body should fail
     with pytest.raises(ValidationError):
         Report(title="Title", references=[])
+
+

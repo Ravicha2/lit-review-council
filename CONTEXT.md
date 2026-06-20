@@ -10,3 +10,9 @@
 
 - **Kaggle MCP Requirement**: Satisfied using the official `@modelcontextprotocol/server-filesystem` executed via `npx` for the file-write tool, avoiding the complexity of building a custom Python MCP server while still meeting rubric constraints.
 
+## Architecture Patterns
+
+- **GatheredSources**: A lightweight Pydantic schema used to pass data from the `Gatherer` node to the `Validator` node in the ADK workflow. It separates unstructured reasoning (`notes: str`) from strictly parsed data (`urls: list[str]`), allowing the Python validator to cleanly count `len(node_input.urls)` without brittle regex parsing.
+- **Validator Loop Directive**: When the `Validator` node routes back to the `Gatherer` (e.g., due to insufficient sources), it returns a specific string directive in its `Event.output`. This acts as the `node_input` for the `Gatherer`'s next turn, explicitly prompting it to use different search keywords and preventing infinite loops over identical search results.
+- **Top-Level Workflow Fan-Out**: The entire pipeline orchestrates concurrency by using a parent `Workflow` with a fan-out edge `('START', (research_workflow, engineer_workflow))` and a `JoinNode` to fan-in, rather than relying on the deprecated `ParallelAgent` class or manual `asyncio.gather` scripts.
+- **Validator State Aggregation**: The Python `Validator` node acts as the state accumulator. Across multiple loops, it shallow-merges the `GatheredSources` (`node_input`) into `ctx.state` arrays. Once conditions are met, it yields the combined arrays as its final `Event.output` for the `Reporter` node.

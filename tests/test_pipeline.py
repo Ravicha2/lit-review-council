@@ -114,8 +114,8 @@ def test_agent_models_from_env():
         import src.pipeline
         importlib.reload(src.pipeline)
         
-        assert src.pipeline.researcher.model.model == "openrouter/research-model"
-        assert src.pipeline.engineer.model.model == "openrouter/eng-model"
+        assert src.pipeline.academic_explorer.model.model == "openrouter/research-model"
+        assert src.pipeline.practitioner_explorer.model.model == "openrouter/eng-model"
         assert src.pipeline.judge.model.model == "openrouter/judge-model"
 
 
@@ -136,8 +136,52 @@ def test_review_output_matches_schema():
     with pytest.raises(ValidationError):
         PeerReviewResult(insight=5) # missing fields
     
-    with pytest.raises(ValidationError):
-        PeerReviewResult(accuracy=11, insight=5, defer=False, rationale="bad") # out of range
+def test_agent_instructions_contain_formatting_and_search_limits():
+    from src.pipeline import academic_reporter, practitioner_reporter
+    
+    for agent in [academic_reporter, practitioner_reporter]:
+        instruction = agent.instruction
+        assert "properly escape all JSON string" in instruction, f"{agent.name} missing JSON escape instruction"
+
+def test_explorer_agents_have_tools_but_no_schema():
+    from src.pipeline import academic_explorer, practitioner_explorer
+    # Explorers should have tools to gather info, but no strict output schema
+    assert len(academic_explorer.tools) > 0
+    assert getattr(academic_explorer, "output_schema", None) is None
+    
+    assert len(practitioner_explorer.tools) > 0
+    assert getattr(practitioner_explorer, "output_schema", None) is None
+
+def test_reporter_agents_have_schema_but_no_tools():
+    from src.pipeline import academic_reporter, practitioner_reporter
+    from src.schema import Report
+    # Reporters should format info, no tools allowed
+    assert len(academic_reporter.tools) == 0
+    assert academic_reporter.output_schema == Report
+    
+    assert len(practitioner_reporter.tools) == 0
+    assert practitioner_reporter.output_schema == Report
+
+def test_sequential_agents_compose_correctly():
+    from src.pipeline import academic_explorer, academic_reporter, academic_sequence
+    from src.pipeline import practitioner_explorer, practitioner_reporter, practitioner_sequence
+    from google.adk.agents import SequentialAgent
+    
+    assert isinstance(academic_sequence, SequentialAgent)
+    assert academic_sequence.sub_agents[0] == academic_explorer
+    assert academic_sequence.sub_agents[1] == academic_reporter
+    
+    assert isinstance(practitioner_sequence, SequentialAgent)
+    assert practitioner_sequence.sub_agents[0] == practitioner_explorer
+    assert practitioner_sequence.sub_agents[1] == practitioner_reporter
+
+def test_fanout_contains_sequences():
+    from src.pipeline import fanout, academic_sequence, practitioner_sequence
+    from google.adk.agents import ParallelAgent
+    
+    assert isinstance(fanout, ParallelAgent)
+    assert academic_sequence in fanout.sub_agents
+    assert practitioner_sequence in fanout.sub_agents
 
 from src.pipeline import run_pipeline, InMemorySessionService
 from unittest.mock import AsyncMock

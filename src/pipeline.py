@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from ddgs import DDGS
 
 from google.genai.types import Content, Part
-from google.adk.agents import Agent, ParallelAgent
+from google.adk.agents import Agent, ParallelAgent, SequentialAgent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.models.lite_llm import LiteLlm
@@ -206,19 +206,25 @@ def get_review_instruction(ctx, other_report_key: str) -> str:
     report_text = other_report.model_dump_json() if hasattr(other_report, "model_dump_json") else json.dumps(other_report) if other_report else ""
     return REVIEW_INSTRUCTION.format(other_report_text=report_text)
 
-researcher = Agent(
-    name="researcher",
+academic_explorer = Agent(
+    name="academic_explorer",
     model=research_model,
-    instruction="""You are a Researcher investigating an open technical
-question using academic sources.
+    instruction="""You are a Researcher exploring an open technical question using academic sources.
 
-OUTPUT REQUIREMENTS — these are not optional:
+OUTPUT REQUIREMENTS:
+1. TOOL USAGE: You MUST use your search tool to find at least 3 distinct sources before returning your final summary. Keep searching until you do.
+2. Output a markdown summary of your findings and the exact URLs you found.""",
+    tools=[search_arxiv]
+)
 
-1. Every substantive claim must cite a specific source you actually retrieved
-   via the search tool. Do not write more than 2-3 sentences in a row without
-   a citation. If you cannot find a source for a claim, do not make the claim.
-   
-   CRITICAL: You MUST output your final response as a valid JSON object matching exactly this schema:
+academic_reporter = Agent(
+    name="academic_reporter",
+    model=research_model,
+    instruction="""You are a Researcher synthesizing a final report based on gathered context.
+
+OUTPUT REQUIREMENTS:
+1. Given the research context provided by the explorer, synthesize a final report.
+2. CRITICAL: You MUST output your final response as a valid JSON object matching exactly this schema:
    {
      "title": "A descriptive title for your report",
      "body": "The markdown formatted text of your report containing your analysis",
@@ -228,48 +234,32 @@ OUTPUT REQUIREMENTS — these are not optional:
    }
    If the `references` list is empty, all citations will be stripped from the final report.
 
-2. If the question has identifiable alternatives or a fork (approach A vs B),
-   present them as a comparison table with concrete rows — capability,
-   property graphs, etc, whatever dimensions the evidence actually supports.
-   Pull specific facts into table cells, not vague adjectives like "more
-   flexible." Prefer "O(neighbors) traversal vs full node scan" over
-   "more efficient."
-
-3. For your non-preferred alternative, include a short section: "When
-   [alternative] is actually the right choice" — name the specific
-   conditions under which someone should pick the option you're not
-   recommending. A recommendation with no honest exceptions is a weaker
-   recommendation.
-
-4. End with a single-paragraph verdict: which approach you recommend, stated
-   as a position, and your confidence. State what evidence would change
-   your mind.
-
-5. Do not summarize the literature neutrally. Your job is to synthesize
-   evidence into a defensible recommendation, not to report what exists.
-
-If your search tool returns too few sources to support a claim with this
-density, say so explicitly rather than padding with unsupported reasoning —
-note it as a gap in available evidence, not a confident claim.""",
-    tools=[search_arxiv],
+3. JSON FORMATTING RULE: You MUST properly escape all JSON string values. For the 'body' field, any newlines MUST be written as `\\n` instead of actual newline characters. DO NOT include any raw control characters in strings.""",
     output_schema=Report,
     output_key="report_1"
 )
 
-engineer = Agent(
-    name="engineer",
+academic_sequence = SequentialAgent(name="academic_sequence", sub_agents=[academic_explorer, academic_reporter])
+
+practitioner_explorer = Agent(
+    name="practitioner_explorer",
     model=eng_model,
-    instruction="""You are an Engineer investigating an open technical
-question using practitioner/production sources (real codebases, docs,
-production patterns) rather than academic papers.
+    instruction="""You are an Engineer exploring an open technical question using practitioner/production sources.
 
-OUTPUT REQUIREMENTS — these are not optional:
+OUTPUT REQUIREMENTS:
+1. TOOL USAGE: You MUST use your search tool to find at least 3 distinct sources before returning your final summary. Keep searching until you do.
+2. Output a markdown summary of your findings and the exact URLs you found.""",
+    tools=[search_github]
+)
 
-1. Every substantive claim must cite a specific source you actually retrieved
-   via the search tool. Do not write more than 2-3 sentences in a row without
-   a citation. If you cannot find a source for a claim, do not make the claim.
+practitioner_reporter = Agent(
+    name="practitioner_reporter",
+    model=eng_model,
+    instruction="""You are an Engineer synthesizing a final report based on gathered context.
 
-   CRITICAL: You MUST output your final response as a valid JSON object matching exactly this schema:
+OUTPUT REQUIREMENTS:
+1. Given the research context provided by the explorer, synthesize a final report. Favor concrete evidence from real systems.
+2. CRITICAL: You MUST output your final response as a valid JSON object matching exactly this schema:
    {
      "title": "A descriptive title for your report",
      "body": "The markdown formatted text of your report containing your analysis",
@@ -279,35 +269,12 @@ OUTPUT REQUIREMENTS — these are not optional:
    }
    If the `references` list is empty, all citations will be stripped from the final report.
 
-2. If the question has identifiable alternatives or a fork (approach A vs B),
-   present them as a comparison table with concrete rows — capability,
-   property graphs, etc, whatever dimensions the evidence actually supports.
-   Pull specific facts into table cells, not vague adjectives like "more
-   flexible." Prefer "O(neighbors) traversal vs full node scan" over
-   "more efficient."
-
-3. For your non-preferred alternative, include a short section: "When
-   [alternative] is actually the right choice" — name the specific
-   conditions under which someone should pick the option you're not
-   recommending. A recommendation with no honest exceptions is a weaker
-   recommendation.
-
-4. End with a single-paragraph verdict: which approach you recommend, stated
-   as a position, and your confidence. State what evidence would change
-   your mind.
-
-5. Do not summarize the literature neutrally. Your job is to synthesize
-   evidence into a defensible recommendation, not to report what exists.
-
-Favor concrete evidence from real systems over abstract argument: cite
-specific projects, specific schema/API choices they made, and specific
-numbers (performance, scale, error rates) where the source provides them.
-A claim like "the knowing project uses 38 edge types with weighted RWR
-traversal" is the standard to hit — not "edge typing is common practice.\"""",
-    tools=[search_github],
+3. JSON FORMATTING RULE: You MUST properly escape all JSON string values. For the 'body' field, any newlines MUST be written as `\\n` instead of actual newline characters. DO NOT include any raw control characters in strings.""",
     output_schema=Report,
     output_key="report_2"
 )
+
+practitioner_sequence = SequentialAgent(name="practitioner_sequence", sub_agents=[practitioner_explorer, practitioner_reporter])
 
 researcher_reviewer = Agent(
     name="researcher_reviewer",
@@ -368,7 +335,7 @@ synthesis = Agent(
     output_key="synthesis_result"
 )
 
-fanout = ParallelAgent(name="fanout", sub_agents=[researcher, engineer])
+fanout = ParallelAgent(name="fanout", sub_agents=[academic_sequence, practitioner_sequence])
 review_fanout = ParallelAgent(name="review_fanout", sub_agents=[researcher_reviewer, engineer_reviewer])
 
 # ---------------------------------------------------------------------------

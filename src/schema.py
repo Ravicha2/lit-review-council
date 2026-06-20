@@ -33,3 +33,7 @@ class JudgeRanking(BaseModel):
 class SynthesisResult(BaseModel):
     markdown: str
     urls_cited: list[str]
+
+class GatheredSources(BaseModel):
+    notes: str
+    urls: list[str]
