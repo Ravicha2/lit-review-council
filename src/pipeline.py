@@ -206,35 +206,70 @@ def get_review_instruction(ctx, other_report_key: str) -> str:
     report_text = other_report.model_dump_json() if hasattr(other_report, "model_dump_json") else json.dumps(other_report) if other_report else ""
     return REVIEW_INSTRUCTION.format(other_report_text=report_text)
 
+EXPLORER_INSTRUCTION_TEMPLATE = """You are a {role} exploring an open technical
+question using {source_type} sources.
+
+1. Use your search tool to find sources that directly address the core
+   question — not just tangentially related material. Find at least 3 such
+   sources, up to a maximum of 6 search calls. If after 6 calls you still
+   don't have 3 strong sources, stop and report what you found plus what's
+   missing — don't keep searching indefinitely.
+2. Output a markdown summary of your findings and the exact URLs you found,
+   noting for each source how directly it addresses the question."""
+
+REPORTER_INSTRUCTION_TEMPLATE = """You are a {role} synthesizing a final report
+from the research context gathered below.
+
+Research context from explorer:
+{explorer_findings}
+
+OUTPUT REQUIREMENTS — not optional:
+1. Every substantive claim must cite a specific source from the explorer's
+   findings. Do not write more than 2-3 sentences in a row without a citation.
+   Do not introduce claims or sources the explorer did not find.
+2. For claims about what a specific tool does or doesn't do, cite something
+   more specific than a bare repo link (a file, README section, or doc
+   passage) OR explicitly mark the claim as inferred, not confirmed.
+3. If there's an identifiable fork between alternatives, present a comparison
+   table with concrete rows, not vague adjectives.
+4. Include a short section on when the non-preferred alternative is actually
+   the right choice.
+5. End with a position-stated verdict and confidence.
+6. IF THE EXPLORER'S FINDINGS ARE THIN OR TANGENTIAL: say so explicitly in
+   the report rather than writing a confident recommendation anyway. A report
+   that honestly states "evidence here is limited, treat this as a starting
+   point not a conclusion" is more useful than a polished report built on
+   weak grounding.
+
+CRITICAL: You MUST output your final response as a valid JSON object matching exactly this schema:
+   {{
+     "title": "A descriptive title for your report",
+     "body": "The markdown formatted text of your report containing your analysis",
+     "references": [
+       {{"title": "Title of source", "url": "URL of source"}}
+     ]
+   }}
+   If the `references` list is empty, all citations will be stripped from the final report.
+
+JSON FORMATTING RULE: You MUST properly escape all JSON string values. For the 'body' field, any newlines MUST be written as `\\n` instead of actual newline characters. DO NOT include any raw control characters in strings."""
+
 academic_explorer = Agent(
     name="academic_explorer",
     model=research_model,
-    instruction="""You are a Researcher exploring an open technical question using academic sources.
-
-OUTPUT REQUIREMENTS:
-1. TOOL USAGE: You MUST use your search tool to find at least 3 distinct sources before returning your final summary. Keep searching until you do.
-2. Output a markdown summary of your findings and the exact URLs you found.""",
+    instruction=EXPLORER_INSTRUCTION_TEMPLATE.format(
+        role="Researcher", 
+        source_type="academic"
+    ),
     tools=[search_arxiv]
 )
 
 academic_reporter = Agent(
     name="academic_reporter",
     model=research_model,
-    instruction="""You are a Researcher synthesizing a final report based on gathered context.
-
-OUTPUT REQUIREMENTS:
-1. Given the research context provided by the explorer, synthesize a final report.
-2. CRITICAL: You MUST output your final response as a valid JSON object matching exactly this schema:
-   {
-     "title": "A descriptive title for your report",
-     "body": "The markdown formatted text of your report containing your analysis",
-     "references": [
-       {"title": "Title of source", "url": "URL of source"}
-     ]
-   }
-   If the `references` list is empty, all citations will be stripped from the final report.
-
-3. JSON FORMATTING RULE: You MUST properly escape all JSON string values. For the 'body' field, any newlines MUST be written as `\\n` instead of actual newline characters. DO NOT include any raw control characters in strings.""",
+    instruction=REPORTER_INSTRUCTION_TEMPLATE.format(
+        role="Researcher", 
+        explorer_findings="[Context provided in the user message]"
+    ),
     output_schema=Report,
     output_key="report_1"
 )
@@ -244,32 +279,20 @@ academic_sequence = SequentialAgent(name="academic_sequence", sub_agents=[academ
 practitioner_explorer = Agent(
     name="practitioner_explorer",
     model=eng_model,
-    instruction="""You are an Engineer exploring an open technical question using practitioner/production sources.
-
-OUTPUT REQUIREMENTS:
-1. TOOL USAGE: You MUST use your search tool to find at least 3 distinct sources before returning your final summary. Keep searching until you do.
-2. Output a markdown summary of your findings and the exact URLs you found.""",
+    instruction=EXPLORER_INSTRUCTION_TEMPLATE.format(
+        role="Engineer", 
+        source_type="practitioner/production"
+    ),
     tools=[search_github]
 )
 
 practitioner_reporter = Agent(
     name="practitioner_reporter",
     model=eng_model,
-    instruction="""You are an Engineer synthesizing a final report based on gathered context.
-
-OUTPUT REQUIREMENTS:
-1. Given the research context provided by the explorer, synthesize a final report. Favor concrete evidence from real systems.
-2. CRITICAL: You MUST output your final response as a valid JSON object matching exactly this schema:
-   {
-     "title": "A descriptive title for your report",
-     "body": "The markdown formatted text of your report containing your analysis",
-     "references": [
-       {"title": "Title of source", "url": "URL of source"}
-     ]
-   }
-   If the `references` list is empty, all citations will be stripped from the final report.
-
-3. JSON FORMATTING RULE: You MUST properly escape all JSON string values. For the 'body' field, any newlines MUST be written as `\\n` instead of actual newline characters. DO NOT include any raw control characters in strings.""",
+    instruction=REPORTER_INSTRUCTION_TEMPLATE.format(
+        role="Engineer", 
+        explorer_findings="[Context provided in the user message]"
+    ),
     output_schema=Report,
     output_key="report_2"
 )
