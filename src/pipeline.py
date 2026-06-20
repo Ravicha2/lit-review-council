@@ -218,9 +218,15 @@ OUTPUT REQUIREMENTS — these are not optional:
    via the search tool. Do not write more than 2-3 sentences in a row without
    a citation. If you cannot find a source for a claim, do not make the claim.
    
-   CRITICAL: You MUST include every cited source in the `references` array of 
-   the JSON output. If the `references` list is empty, all citations will be 
-   stripped from the final report.
+   CRITICAL: You MUST output your final response as a valid JSON object matching exactly this schema:
+   {
+     "title": "A descriptive title for your report",
+     "body": "The markdown formatted text of your report containing your analysis",
+     "references": [
+       {"title": "Title of source", "url": "URL of source"}
+     ]
+   }
+   If the `references` list is empty, all citations will be stripped from the final report.
 
 2. If the question has identifiable alternatives or a fork (approach A vs B),
    present them as a comparison table with concrete rows — capability,
@@ -263,9 +269,15 @@ OUTPUT REQUIREMENTS — these are not optional:
    via the search tool. Do not write more than 2-3 sentences in a row without
    a citation. If you cannot find a source for a claim, do not make the claim.
 
-   CRITICAL: You MUST include every cited source in the `references` array of 
-   the JSON output. If the `references` list is empty, all citations will be 
-   stripped from the final report.
+   CRITICAL: You MUST output your final response as a valid JSON object matching exactly this schema:
+   {
+     "title": "A descriptive title for your report",
+     "body": "The markdown formatted text of your report containing your analysis",
+     "references": [
+       {"title": "Title of source", "url": "URL of source"}
+     ]
+   }
+   If the `references` list is empty, all citations will be stripped from the final report.
 
 2. If the question has identifiable alternatives or a fork (approach A vs B),
    present them as a comparison table with concrete rows — capability,
@@ -401,6 +413,12 @@ async def run_pipeline(topic: str):
         new_message=Content(parts=[Part(text=f"Research topic: {topic}")])
     ):
         pass
+
+    session_obj = await session_service.get_session(app_name="app", user_id=user_id, session_id=session_id)
+    print("=== RESEARCHER REPORT ===")
+    print(session_obj.state.get("report_1"))
+    print("=== ENGINEER REPORT ===")
+    print(session_obj.state.get("report_2"))
 
     # 2. Peer Review
     runner_review = Runner(agent=review_fanout, session_service=session_service, app_name="app")

@@ -1,0 +1,1 @@
+- **Test-Driven Development (TDD)**: TDD is strictly required for every feature implemented. Tests must be written before writing any implementation code. Follow the red-green-refactor cycle.

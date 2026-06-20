@@ -14,8 +14,9 @@ class BaseProvider(ABC):
 
 class ArxivProvider(BaseProvider):
     def search(self, query: str) -> list[SearchResult]:
-        # Build query for all fields
-        encoded_query = urllib.parse.quote(f"all:{query}")
+        # Pass query directly to allow ArXiv to handle multi-word bag-of-words natively.
+        # Previously `all:{query}` forced exact phrase matching for multi-word queries.
+        encoded_query = urllib.parse.quote(query)
         url = f"http://export.arxiv.org/api/query?search_query={encoded_query}&start=0&max_results=3"
         r = requests.get(url, timeout=10)
         r.raise_for_status()

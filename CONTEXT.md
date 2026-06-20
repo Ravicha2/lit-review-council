@@ -9,3 +9,4 @@
 ## Infrastructure
 
 - **Kaggle MCP Requirement**: Satisfied using the official `@modelcontextprotocol/server-filesystem` executed via `npx` for the file-write tool, avoiding the complexity of building a custom Python MCP server while still meeting rubric constraints.
+
