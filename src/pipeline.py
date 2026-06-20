@@ -20,7 +20,9 @@ import os
 
 # Instantiate LiteLLM. Note: Requires OPENROUTER_API_KEY set in .env or environment
 # e.g. openrouter/deepseek/deepseek-v4-flash or openrouter/kimi/kimi-2.6
-default_model = LiteLlm(model=os.getenv("MODEL_ID", "openrouter/deepseek/deepseek-v4-flash"))
+eng_model = LiteLlm(model=os.getenv("ENG_MODEL") or "openrouter/deepseek/deepseek-v4-flash")
+research_model = LiteLlm(model=os.getenv("RESEARCH_MODEL") or "openrouter/deepseek/deepseek-v4-flash")
+judge_model = LiteLlm(model=os.getenv("JUDGE_MODEL") or "openrouter/deepseek/deepseek-v4-flash")
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -165,7 +167,7 @@ slug: {topic_slug}
 
 researcher = Agent(
     name="researcher",
-    model=default_model,
+    model=research_model,
     instruction="You are a Researcher. Write a deep and detailed report on the topic using academic sources. Synthesize the full contents returned by the search tool.",
     tools=[search_arxiv],
     output_schema=Report,
@@ -174,7 +176,7 @@ researcher = Agent(
 
 engineer = Agent(
     name="engineer",
-    model=default_model,
+    model=eng_model,
     instruction="You are an Engineer. Write a deep and detailed report on the topic using practitioner sources. Synthesize the full contents returned by the search tool.",
     tools=[search_github],
     output_schema=Report,
@@ -183,7 +185,7 @@ engineer = Agent(
 
 judge = Agent(
     name="judge",
-    model=default_model,
+    model=judge_model,
     instruction=lambda ctx: f"You are a Judge. Evaluate the following anonymized reports and rank them by accuracy and insight. Reports:\n{ctx.session.state.get('anonymized_reports_text')}",
     before_agent_callback=before_judge,
     after_agent_callback=after_judge,
@@ -193,7 +195,7 @@ judge = Agent(
 
 synthesis = Agent(
     name="synthesis",
-    model=default_model,
+    model=judge_model,
     instruction=get_synthesis_prompt,
     output_schema=SynthesisResult,
     output_key="synthesis_result"

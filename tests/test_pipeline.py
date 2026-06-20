@@ -1,5 +1,11 @@
 import pytest
 import json
+import os
+import sys
+import importlib
+from unittest.mock import patch
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.pipeline import before_judge, after_judge, get_synthesis_prompt
 
 class MockSession:
@@ -96,3 +102,18 @@ def test_get_synthesis_prompt_with_validation_error():
     ctx = MockContext(state)
     prompt = get_synthesis_prompt(ctx)
     assert "ERROR TO FIX IN THIS RETRY:\nHallucinated URL: https://bad.com" in prompt
+
+def test_agent_models_from_env():
+    env_vars = {
+        "RESEARCH_MODEL": "openrouter/research-model",
+        "ENG_MODEL": "openrouter/eng-model",
+        "JUDGE_MODEL": "openrouter/judge-model",
+    }
+    with patch.dict(os.environ, env_vars, clear=False):
+        import src.pipeline
+        importlib.reload(src.pipeline)
+        
+        assert src.pipeline.researcher.model.model == "openrouter/research-model"
+        assert src.pipeline.engineer.model.model == "openrouter/eng-model"
+        assert src.pipeline.judge.model.model == "openrouter/judge-model"
+
