@@ -1,0 +1,113 @@
+import json
+from typing import Optional, Any
+
+EXPLORER_INSTRUCTION_TEMPLATE = """You are a {role} exploring an open technical
+question using {source_type} sources.
+
+1. Use your search tools to find sources that directly address the core
+   question — not just tangentially related material. Find at least {MIN_SOURCES} such
+   sources, up to a maximum of {MAX_SOURCES} search calls. If after {MAX_SOURCES} calls you still
+   don't have {MIN_SOURCES} strong sources, stop and report what you found plus what's
+   missing — don't keep searching indefinitely.
+2. Output a markdown summary of your findings and the exact URLs you found,
+   noting for each source how directly it addresses the question."""
+
+REPORTER_INSTRUCTION_TEMPLATE = """You are a {role} synthesizing a final report
+from the research context gathered below.
+
+Research context from explorer:
+{explorer_findings}
+
+OUTPUT REQUIREMENTS — not optional:
+1. Every substantive claim must cite a specific source from the explorer's
+   findings. Do not write more than 2-3 sentences in a row without a citation.
+   Do not introduce claims or sources the explorer did not find.
+2. For claims about what a specific tool does or doesn't do, cite something
+   more specific than a bare repo link (a file, README section, or doc
+   passage) OR explicitly mark the claim as inferred, not confirmed.
+3. If there's an identifiable fork between alternatives, present a comparison
+   table with concrete rows, not vague adjectives.
+4. Include a short section on when the non-preferred alternative is actually
+   the right choice.
+5. End with a position-stated verdict and confidence.
+6. IF THE EXPLORER'S FINDINGS ARE THIN OR TANGENTIAL: say so explicitly in
+   the report rather than writing a confident recommendation anyway. A report
+   that honestly states "evidence here is limited, treat this as a starting
+   point not a conclusion" is more useful than a polished report built on
+   weak grounding.
+
+CRITICAL: You MUST output your final response as a valid JSON object matching exactly this schema:
+   {{
+     "title": "A descriptive title for your report",
+     "body": "The markdown formatted text of your report containing your analysis",
+     "references": [
+       {{"title": "Title of source", "url": "URL of source"}}
+     ]
+   }}
+   If the `references` list is empty, all citations will be stripped from the final report.
+
+JSON FORMATTING RULE: You MUST properly escape all JSON string values. For the 'body' field, any newlines MUST be written as `\\n` instead of actual newline characters. DO NOT include any raw control characters in strings."""
+
+ENSEMBLE_REVIEW_INSTRUCTION = """You are participating in a Peer Review Ensemble.
+You will read two anonymized research reports on the same topic.
+Your job is to evaluate both reports based on their accuracy, insight, and how well they balance academic rigor with real-world engineering feasibility.
+
+Report A:
+{report_a_text}
+
+Report B:
+{report_b_text}
+
+Read both reports directly. State which report is stronger, citing specific claims or evidence from the reports themselves.
+Output your evaluation as a ranking list (e.g. ["A", "B"] if A is better, or ["B", "A"] if B is better) and provide a 1-2 sentence rationale."""
+
+def build_ensemble_instruction(role: str, report_a_text: str, report_b_text: str) -> str:
+    """Returns the pure formatted instruction string for an ensemble reviewer role."""
+    base = ENSEMBLE_REVIEW_INSTRUCTION.format(report_a_text=report_a_text, report_b_text=report_b_text)
+    if role == "Researcher":
+        return f"You are a Research Scientist.\n\n{base}"
+    elif role == "Engineer":
+        return f"You are a Software Engineer.\n\n{base}"
+    else:
+        return f"You are a Senior Systems Architect and Principal Investigator.\n\n{base}"
+
+def build_synthesis_prompt(
+    topic: str,
+    topic_slug: str,
+    winning_report_id: str,
+    rationale: str,
+    report_1: Any,
+    report_2: Any,
+    validation_error: Optional[str] = None
+) -> str:
+    """Returns the pure formatted prompt string for the synthesis step."""
+    winning_role = "researcher" if winning_report_id == "report_1" else "engineer"
+    
+    def dump(rep):
+        if hasattr(rep, "model_dump_json"): return rep.model_dump_json()
+        if isinstance(rep, str): return rep
+        return json.dumps(rep)
+    
+    prompt = f"""Synthesize the final litreview_log.md entry for the topic: {topic}.
+Topic slug: {topic_slug}
+Winning approach was from the {winning_role} agent, with rationale: {rationale}.
+
+Report 1 (Researcher):
+{dump(report_1)}
+
+Report 2 (Engineer):
+{dump(report_2)}
+
+Strict Constraints:
+1. Ensure every cited URL in your markdown body already exists in the provided reports' references.
+2. The output must have YAML frontmatter exactly like this:
+---
+title: {topic}
+slug: {topic_slug}
+---
+3. Include the rationale and alternatives considered.
+"""
+    if validation_error:
+        prompt += f"\n\nERROR TO FIX IN THIS RETRY:\n{validation_error}"
+    
+    return prompt

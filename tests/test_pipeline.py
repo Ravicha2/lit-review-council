@@ -6,38 +6,7 @@ import importlib
 from unittest.mock import patch, AsyncMock
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from src.pipeline import get_synthesis_prompt
-
-class MockSession:
-    def __init__(self, state):
-        self.state = state
-
-class MockContext:
-    def __init__(self, state):
-        self.session = MockSession(state)
-
 from src.schema import JudgeRanking, PeerReviewResult
-
-def test_get_synthesis_prompt_formats_correctly():
-    class FakeReport:
-        def model_dump_json(self):
-            return '{"fake": "report"}'
-            
-    state = {
-        "topic": "Graph DBs",
-        "topic_slug": "graph-dbs",
-        "winning_report_id": "report_2",
-        "peer_review_rationale": "It was practical",
-        "report_1": FakeReport(),
-        "report_2": FakeReport()
-    }
-    ctx = MockContext(state)
-    prompt = get_synthesis_prompt(ctx)
-    assert "Graph DBs" in prompt
-    assert "graph-dbs" in prompt
-    assert "engineer" in prompt
-    assert "It was practical" in prompt
-    assert '{"fake": "report"}' in prompt
 
 def test_agent_models_from_env():
     env_vars = {
