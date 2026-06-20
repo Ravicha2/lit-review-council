@@ -78,11 +78,14 @@ def create_adk_tool(provider: BaseProvider, name: str, description: str) -> Call
     Safely catches exceptions so the agent doesn't crash on network errors.
     """
     def _search_tool(query: str) -> list[dict]:
+        print(f"[*] {name} searching for: '{query}'", flush=True)
         try:
             results = provider.search(query)
+            print(f"[*] {name} found {len(results)} results", flush=True)
             return [r.model_dump() for r in results]
         except Exception as e:
             # Return a graceful error so the LLM knows the tool failed but can continue
+            print(f"[!] {name} error: {str(e)}", flush=True)
             return [{"error": f"{name} API error: {str(e)}"}]
             
     _search_tool.__name__ = name

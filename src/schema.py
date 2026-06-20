@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict
 
 class SearchResult(BaseModel):
@@ -18,6 +18,12 @@ class Report(BaseModel):
 
 class Review(BaseModel):
     score: float
+    rationale: str
+
+class PeerReviewResult(BaseModel):
+    accuracy: int = Field(ge=0, le=10)
+    insight: int = Field(ge=0, le=10)
+    defer: bool
     rationale: str
 
 class JudgeRanking(BaseModel):
