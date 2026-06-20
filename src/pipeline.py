@@ -1,63 +1,50 @@
 import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import json
 import random
+from dotenv import load_dotenv
+load_dotenv()
 import asyncio
 from datetime import datetime
 from pydantic import BaseModel, Field
 
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 from google.genai.types import Content, Part
 from google.adk.agents import Agent, ParallelAgent
-from google.adk import Runner
-from google.adk.agents.context import Context
+from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
+from google.adk.models.lite_llm import LiteLlm
+import os
+
+# Instantiate LiteLLM. Note: Requires OPENROUTER_API_KEY set in .env or environment
+# e.g. openrouter/deepseek/deepseek-v4-flash or openrouter/kimi/kimi-2.6
+default_model = LiteLlm(model=os.getenv("MODEL_ID", "openrouter/deepseek/deepseek-v4-flash"))
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-# ---------------------------------------------------------------------------
-# Schema Definitions
-# ---------------------------------------------------------------------------
-
-class Reference(BaseModel):
-    title: str = Field(description="Title of the paper or resource")
-    url: str = Field(description="Actual URL retrieved from the search tool")
-
-class Report(BaseModel):
-    title: str = Field(description="Short title for the report")
-    body: str = Field(description="3-6 paragraph argument in plain prose")
-    references: list[Reference] = Field(description="List of supporting references")
-
-class JudgeRanking(BaseModel):
-    ranking: list[str] = Field(description="Ordered list of anonymized report labels (e.g. ['A', 'B'] or ['B', 'A']), from best to worst")
-    rationale: str = Field(description="Brief explanation for the first choice")
-
-class SynthesisResult(BaseModel):
-    markdown: str = Field(description="The complete synthesized markdown string including YAML frontmatter")
-    urls_cited: list[str] = Field(description="List of all URLs actually cited in the markdown body")
+from src.schema import Reference, Report, JudgeRanking, SynthesisResult
 
 # ---------------------------------------------------------------------------
 # Tools
 # ---------------------------------------------------------------------------
 
-def search_arxiv(query: str) -> list[dict]:
-    """Search arXiv for academic papers matching the query. Always use this to ground your research."""
-    ddgs = DDGS()
-    try:
-        results = ddgs.text(f"site:arxiv.org {query}", max_results=5)
-        return results if results else []
-    except Exception as e:
-        return [{"error": str(e)}]
+import os
+from src.providers import ArxivProvider, GithubProvider, create_adk_tool
 
-def search_github(query: str) -> list[dict]:
-    """Search GitHub and official docs for engineering/practitioner evidence."""
-    ddgs = DDGS()
-    try:
-        results = ddgs.text(f"site:github.com OR site:docs.* {query}", max_results=5)
-        return results if results else []
-    except Exception as e:
-        return [{"error": str(e)}]
+search_arxiv = create_adk_tool(
+    ArxivProvider(), 
+    name="search_arxiv", 
+    description="Search arXiv for academic papers matching the query using the official API."
+)
+
+search_github = create_adk_tool(
+    GithubProvider(), 
+    name="search_github", 
+    description="Search GitHub for repositories matching the query and fetch their READMEs."
+)
 
 async def write_to_filesystem_mcp(content: str, path: str):
     """Use MCP filesystem server to write the final markdown log."""
@@ -74,7 +61,12 @@ async def write_to_filesystem_mcp(content: str, path: str):
             await session.initialize()
             try:
                 result = await session.call_tool("read_file", {"path": abs_path})
-                existing = result.content[0].text if result.content else ""
+                if getattr(result, "isError", False):
+                    existing = ""
+                else:
+                    existing = result.content[0].text if result.content else ""
+                    if "ENOENT" in existing and "no such file" in existing:
+                        existing = ""
             except Exception:
                 existing = ""
             
@@ -85,53 +77,50 @@ async def write_to_filesystem_mcp(content: str, path: str):
 # Callbacks
 # ---------------------------------------------------------------------------
 
-async def before_judge(context: Context):
+async def before_judge(*, callback_context, **kwargs):
     reports = {
-        "researcher": context.session.state.get("report_1"),
-        "engineer": context.session.state.get("report_2"),
+        "researcher": callback_context.session.state.get("report_1"),
+        "engineer": callback_context.session.state.get("report_2"),
     }
     
     roles = ["researcher", "engineer"]
     labels = ["A", "B"]
     random.shuffle(labels)
     anon_map = {labels[0]: roles[0], labels[1]: roles[1]}
-    context.session.state["anon_map_judge"] = anon_map
+    callback_context.session.state["anon_map_judge"] = anon_map
     
     anon_reports = []
     for lbl, role in anon_map.items():
         rep = reports[role]
         if rep:
-            # We must be careful how we dump this depending on what ADK returns
-            # If it's a dict, use json.dumps, if Pydantic, use model_dump_json()
             if hasattr(rep, "model_dump_json"):
                 rep_json = rep.model_dump_json()
             else:
                 rep_json = json.dumps(rep)
             anon_reports.append(f"--- Report {lbl} ---\n{rep_json}\n")
     
-    context.session.state["anonymized_reports_text"] = "\n".join(anon_reports)
+    callback_context.session.state["anonymized_reports_text"] = "\n".join(anon_reports)
 
-async def after_judge(context: Context):
-    rankings = context.session.state.get("rankings_judge")
+async def after_judge(*, callback_context, **kwargs):
+    rankings = callback_context.session.state.get("rankings_judge")
     if not rankings:
         return
     
-    # rankings could be dict or JudgeRanking instance
     ranking_list = rankings.ranking if hasattr(rankings, "ranking") else rankings.get("ranking", [])
     rationale = rankings.rationale if hasattr(rankings, "rationale") else rankings.get("rationale", "")
     
     if not ranking_list:
         ranking_list = ["A", "B"]
         
-    anon_map = context.session.state.get("anon_map_judge")
+    anon_map = callback_context.session.state.get("anon_map_judge")
     top_label = ranking_list[0]
     winning_role = anon_map.get(top_label)
     
-    context.session.state["winning_role"] = winning_role
-    context.session.state["winning_report"] = context.session.state.get("report_1" if winning_role == "researcher" else "report_2")
-    context.session.state["judge_rationale"] = rationale
+    callback_context.session.state["winning_role"] = winning_role
+    callback_context.session.state["winning_report"] = callback_context.session.state.get("report_1" if winning_role == "researcher" else "report_2")
+    callback_context.session.state["judge_rationale"] = rationale
 
-def get_synthesis_prompt(ctx: Context) -> str:
+def get_synthesis_prompt(ctx) -> str:
     topic = ctx.session.state.get("topic")
     topic_slug = ctx.session.state.get("topic_slug")
     winning_role = ctx.session.state.get("winning_role")
@@ -142,6 +131,7 @@ def get_synthesis_prompt(ctx: Context) -> str:
     
     def dump(rep):
         if hasattr(rep, "model_dump_json"): return rep.model_dump_json()
+        if isinstance(rep, str): return rep
         return json.dumps(rep)
     
     prompt = f"""Synthesize the final litreview_log.md entry for the topic: {topic}.
@@ -156,7 +146,11 @@ Report 2 (Engineer):
 
 Strict Constraints:
 1. Ensure every cited URL in your markdown body already exists in the provided reports' references.
-2. The output must have YAML frontmatter exactly as specified in the project spec.
+2. The output must have YAML frontmatter exactly like this:
+---
+title: {topic}
+slug: {topic_slug}
+---
 3. Include the rationale and alternatives considered.
 """
     val_err = ctx.session.state.get("validation_error")
@@ -171,8 +165,8 @@ Strict Constraints:
 
 researcher = Agent(
     name="researcher",
-    model="gemini-2.5-flash",
-    instruction="You are a Researcher. Write a brief report on the topic using academic sources. Use the search tool to ground your citations.",
+    model=default_model,
+    instruction="You are a Researcher. Write a deep and detailed report on the topic using academic sources. Synthesize the full contents returned by the search tool.",
     tools=[search_arxiv],
     output_schema=Report,
     output_key="report_1"
@@ -180,8 +174,8 @@ researcher = Agent(
 
 engineer = Agent(
     name="engineer",
-    model="gemini-2.5-flash",
-    instruction="You are an Engineer. Write a brief report on the topic using practitioner sources. Use the search tool to ground your citations.",
+    model=default_model,
+    instruction="You are an Engineer. Write a deep and detailed report on the topic using practitioner sources. Synthesize the full contents returned by the search tool.",
     tools=[search_github],
     output_schema=Report,
     output_key="report_2"
@@ -189,7 +183,7 @@ engineer = Agent(
 
 judge = Agent(
     name="judge",
-    model="gemini-2.5-flash",
+    model=default_model,
     instruction=lambda ctx: f"You are a Judge. Evaluate the following anonymized reports and rank them by accuracy and insight. Reports:\n{ctx.session.state.get('anonymized_reports_text')}",
     before_agent_callback=before_judge,
     after_agent_callback=after_judge,
@@ -199,7 +193,7 @@ judge = Agent(
 
 synthesis = Agent(
     name="synthesis",
-    model="gemini-2.5-flash",
+    model=default_model,
     instruction=get_synthesis_prompt,
     output_schema=SynthesisResult,
     output_key="synthesis_result"
@@ -213,6 +207,8 @@ async def run_pipeline(topic: str):
     session_service = InMemorySessionService()
     session_id = "sess1"
     user_id = "user1"
+    
+    await session_service.create_session(app_name="app", user_id=user_id, session_id=session_id)
     
     def get_state(runner: Runner):
         # We can extract the state from the session_service
@@ -230,7 +226,7 @@ async def run_pipeline(topic: str):
     
     # 1. Fanout
     fanout = ParallelAgent(name="fanout", sub_agents=[researcher, engineer])
-    runner = Runner(node=fanout, session_service=session_service)
+    runner = Runner(agent=fanout, session_service=session_service, app_name="app")
     print("Running Stage 1: Research Fan-out...")
     
     init_state = {
@@ -249,12 +245,16 @@ async def run_pipeline(topic: str):
 
     # 2. Judge
     print("Running Stage 2: Independent Evaluation...")
-    runner_judge = Runner(node=judge, session_service=session_service)
-    async for event in runner_judge.run_async(user_id=user_id, session_id=session_id):
+    runner_judge = Runner(agent=judge, session_service=session_service, app_name="app")
+    async for event in runner_judge.run_async(
+        user_id=user_id, 
+        session_id=session_id,
+        new_message=Content(parts=[Part(text="Please evaluate the reports.")])
+    ):
         pass
     
     # Let's get the state after judge
-    session_obj = session_service.get_session(user_id=user_id, session_id=session_id)
+    session_obj = await session_service.get_session(app_name="app", user_id=user_id, session_id=session_id)
     winning_role = session_obj.state.get("winning_role")
     print(f"Winning role: {winning_role}")
     
@@ -267,11 +267,15 @@ async def run_pipeline(topic: str):
             # We inject the error into state
             session_obj.state.update({"validation_error": "Previous attempt included hallucinated URLs. Only use URLs present in the original reports."})
             
-        runner_synth = Runner(node=synthesis, session_service=session_service)
-        async for event in runner_synth.run_async(user_id=user_id, session_id=session_id):
+        runner_synth = Runner(agent=synthesis, session_service=session_service, app_name="app")
+        async for event in runner_synth.run_async(
+            user_id=user_id, 
+            session_id=session_id,
+            new_message=Content(parts=[Part(text="Please synthesize the final report.")])
+        ):
             pass
             
-        session_obj = session_service.get_session(user_id=user_id, session_id=session_id)
+        session_obj = await session_service.get_session(app_name="app", user_id=user_id, session_id=session_id)
         result = session_obj.state.get("synthesis_result")
         if not result:
             print("No synthesis result produced.")
