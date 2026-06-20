@@ -5,6 +5,16 @@ import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
 from typing import Callable, List, Dict, Any
 
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
+
+def is_retryable_http_error(exception):
+    if isinstance(exception, requests.exceptions.HTTPError):
+        status = exception.response.status_code
+        # Retry on 429 Too Many Requests and 5xx Server Errors
+        return status == 429 or status >= 500
+    # Also retry on timeouts and connection errors
+    return isinstance(exception, (requests.exceptions.ConnectionError, requests.exceptions.Timeout))
+
 from .schema import SearchResult
 
 class BaseProvider(ABC):
@@ -13,11 +23,17 @@ class BaseProvider(ABC):
         pass
 
 class ArxivProvider(BaseProvider):
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=2, max=20),
+        retry=retry_if_exception(is_retryable_http_error),
+        reraise=True
+    )
     def search(self, query: str) -> list[SearchResult]:
         # Pass query directly to allow ArXiv to handle multi-word bag-of-words natively.
         # Previously `all:{query}` forced exact phrase matching for multi-word queries.
         encoded_query = urllib.parse.quote(query)
-        url = f"http://export.arxiv.org/api/query?search_query={encoded_query}&start=0&max_results=3"
+        url = f"http://export.arxiv.org/api/query?search_query={encoded_query}&start=0&max_results=5"
         r = requests.get(url, timeout=10)
         r.raise_for_status()
         
@@ -43,6 +59,12 @@ class ArxivProvider(BaseProvider):
         return results
 
 class GithubProvider(BaseProvider):
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=2, max=20),
+        retry=retry_if_exception(is_retryable_http_error),
+        reraise=True
+    )
     def search(self, query: str) -> list[SearchResult]:
         url = f"https://api.github.com/search/repositories?q={urllib.parse.quote(query)}&sort=stars&order=desc"
         headers = {"Accept": "application/vnd.github.v3+json"}
@@ -55,7 +77,7 @@ class GithubProvider(BaseProvider):
         data = r.json()
         
         results = []
-        for item in data.get("items", [])[:3]:
+        for item in data.get("items", [])[:5]:
             repo_name = item.get("full_name")
             html_url = item.get("html_url")
             description = item.get("description") or ""
@@ -70,6 +92,46 @@ class GithubProvider(BaseProvider):
                 url=html_url,
                 snippet=description,
                 content=content
+            ))
+        return results
+
+class TavilyProvider(BaseProvider):
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=2, max=20),
+        retry=retry_if_exception(is_retryable_http_error),
+        reraise=True
+    )
+    def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+        api_key = os.getenv("TAVILY_API_KEY")
+        if not api_key:
+            print("[!] TAVILY_API_KEY not set. Cannot search Tavily.")
+            return []
+            
+        url = "https://api.tavily.com/search"
+        payload = {
+            "api_key": api_key,
+            "query": query,
+            "max_results": max_results,
+            "include_raw_content": True
+        }
+        
+        r = requests.post(url, json=payload, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        
+        results = []
+        for item in data.get("results", []):
+            title = item.get("title") or ""
+            url_text = item.get("url") or ""
+            content = item.get("content") or ""
+            raw_content = item.get("raw_content") or content
+            
+            results.append(SearchResult(
+                title=title,
+                url=url_text,
+                snippet=content,
+                content=raw_content
             ))
         return results
 

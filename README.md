@@ -17,7 +17,7 @@ This pipeline solves these issues through a multi-agent architecture:
 
 The system consists of 4 agents connected via ADK workflows:
 
-- **Stage 1 (Parallel Fan-out)**: The `Researcher` and `Engineer` agents conduct domain-isolated research using DuckDuckGo search.
+- **Stage 1 (Parallel Fan-out)**: The `Researcher` and `Engineer` agents conduct domain-isolated research using Arxiv and GitHub Search APIs.
 - **Stage 2 (Evaluation)**: Reports are shuffled and anonymized. The `Judge` evaluates them and selects a winner.
 - **Stage 3 (Synthesis)**: The `Synthesis` agent writes the final brief.
 - **Persistence**: File writing is handled via a lightweight MCP client wrapping `@modelcontextprotocol/server-filesystem` via `npx`, satisfying Kaggle MCP rubric requirements.

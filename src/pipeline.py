@@ -3,26 +3,25 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import json
 import random
+from collections import defaultdict
 from dotenv import load_dotenv
 load_dotenv()
 import asyncio
 from datetime import datetime
 from pydantic import BaseModel, Field
 
-from ddgs import DDGS
-
 from google.genai.types import Content, Part
 from google.adk.agents import Agent, ParallelAgent, SequentialAgent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.models.lite_llm import LiteLlm
-import os
 
-# Instantiate LiteLLM. Note: Requires OPENROUTER_API_KEY set in .env or environment
-# e.g. openrouter/deepseek/deepseek-v4-flash or openrouter/kimi/kimi-2.6
 eng_model = LiteLlm(model=os.getenv("ENG_MODEL") or "openrouter/deepseek/deepseek-v4-flash")
 research_model = LiteLlm(model=os.getenv("RESEARCH_MODEL") or "openrouter/deepseek/deepseek-v4-flash")
 judge_model = LiteLlm(model=os.getenv("JUDGE_MODEL") or "openrouter/deepseek/deepseek-v4-flash")
+
+MAX_SOURCES = int(os.getenv("MAX_SOURCES", "10"))
+MIN_SOURCES = min(MAX_SOURCES, 5)
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -33,8 +32,7 @@ from src.schema import Reference, Report, JudgeRanking, SynthesisResult, PeerRev
 # Tools
 # ---------------------------------------------------------------------------
 
-import os
-from src.providers import ArxivProvider, GithubProvider, create_adk_tool
+from src.providers import ArxivProvider, GithubProvider, TavilyProvider, create_adk_tool
 
 search_arxiv = create_adk_tool(
     ArxivProvider(), 
@@ -46,6 +44,12 @@ search_github = create_adk_tool(
     GithubProvider(), 
     name="search_github", 
     description="Search GitHub for repositories matching the query and fetch their READMEs."
+)
+
+search_tavily = create_adk_tool(
+    TavilyProvider(),
+    name="search_tavily",
+    description="Search the web for real-world implementation details, blogs, and documentation."
 )
 
 async def write_to_filesystem_mcp(content: str, path: str):
@@ -79,75 +83,12 @@ async def write_to_filesystem_mcp(content: str, path: str):
 # Callbacks
 # ---------------------------------------------------------------------------
 
-async def before_judge(*, callback_context, **kwargs):
-    reports = {
-        "report_1": callback_context.session.state.get("report_1"),
-        "report_2": callback_context.session.state.get("report_2"),
-    }
-    
-    labels = ["A", "B"]
-    random.shuffle(labels)
-    anon_map = {labels[0]: "report_1", labels[1]: "report_2"}
-    callback_context.session.state["anon_map_judge"] = anon_map
-    
-    def dump(rep):
-        if rep:
-            return rep.model_dump_json() if hasattr(rep, "model_dump_json") else json.dumps(rep)
-        return ""
-        
-    callback_context.session.state["anon_report_a"] = dump(reports[anon_map["A"]])
-    callback_context.session.state["anon_report_b"] = dump(reports[anon_map["B"]])
-    
-    rev_res = callback_context.session.state.get("review_researcher")
-    rev_eng = callback_context.session.state.get("review_engineer")
-    
-    def get_rev_info(rev):
-        if not rev:
-            return "Unknown", "No rationale"
-        defer = rev.defer if hasattr(rev, "defer") else rev.get("defer", False)
-        rationale = rev.rationale if hasattr(rev, "rationale") else rev.get("rationale", "")
-        verdict = "Defer to this report" if defer else "Do not defer to this report"
-        return verdict, rationale
-        
-    res_verdict, res_rationale = get_rev_info(rev_res)
-    eng_verdict, eng_rationale = get_rev_info(rev_eng)
-
-    if anon_map["A"] == "report_1":
-        callback_context.session.state["review_a_verdict"] = eng_verdict
-        callback_context.session.state["review_a_reason"] = eng_rationale
-        callback_context.session.state["review_b_verdict"] = res_verdict
-        callback_context.session.state["review_b_reason"] = res_rationale
-    else:
-        callback_context.session.state["review_a_verdict"] = res_verdict
-        callback_context.session.state["review_a_reason"] = res_rationale
-        callback_context.session.state["review_b_verdict"] = eng_verdict
-        callback_context.session.state["review_b_reason"] = eng_rationale
-
-
-async def after_judge(*, callback_context, **kwargs):
-    rankings = callback_context.session.state.get("rankings_judge")
-    if not rankings:
-        return
-    
-    ranking_list = rankings.ranking if hasattr(rankings, "ranking") else rankings.get("ranking", [])
-    rationale = rankings.rationale if hasattr(rankings, "rationale") else rankings.get("rationale", "")
-    
-    if not ranking_list:
-        ranking_list = ["A", "B"]
-        
-    anon_map = callback_context.session.state.get("anon_map_judge")
-    top_label = ranking_list[0]
-    winning_report_id = anon_map.get(top_label)
-    
-    callback_context.session.state["winning_report_id"] = winning_report_id
-    callback_context.session.state["judge_rationale"] = rationale
-
 def get_synthesis_prompt(ctx) -> str:
     topic = ctx.session.state.get("topic")
     topic_slug = ctx.session.state.get("topic_slug")
     winning_report_id = ctx.session.state.get("winning_report_id")
     winning_role = "researcher" if winning_report_id == "report_1" else "engineer"
-    rationale = ctx.session.state.get("judge_rationale") or ctx.session.state.get("peer_review_rationale")
+    rationale = ctx.session.state.get("peer_review_rationale")
     
     rep1 = ctx.session.state.get("report_1")
     rep2 = ctx.session.state.get("report_2")
@@ -186,33 +127,13 @@ slug: {topic_slug}
 # Agents
 # ---------------------------------------------------------------------------
 
-REVIEW_INSTRUCTION = """You are reviewing a research report written by a colleague
-on the same topic. You did not write this report. Evaluate it on its own merits.
+EXPLORER_INSTRUCTION_TEMPLATE = f"""You are a {{role}} exploring an open technical
+question using {{source_type}} sources.
 
-Report to review:
-{other_report_text}
-
-Score it 0-10 on two dimensions:
-- accuracy: are the claims well-supported by the cited sources?
-- insight: does it surface a genuinely useful, non-obvious recommendation?
-
-Then state: would you defer to this report's recommended approach over your own,
-yes or no, and why in one sentence.
-
-Do not summarize the report back. Output only the evaluation."""
-
-def get_review_instruction(ctx, other_report_key: str) -> str:
-    other_report = ctx.session.state.get(other_report_key)
-    report_text = other_report.model_dump_json() if hasattr(other_report, "model_dump_json") else json.dumps(other_report) if other_report else ""
-    return REVIEW_INSTRUCTION.format(other_report_text=report_text)
-
-EXPLORER_INSTRUCTION_TEMPLATE = """You are a {role} exploring an open technical
-question using {source_type} sources.
-
-1. Use your search tool to find sources that directly address the core
-   question — not just tangentially related material. Find at least 3 such
-   sources, up to a maximum of 6 search calls. If after 6 calls you still
-   don't have 3 strong sources, stop and report what you found plus what's
+1. Use your search tools to find sources that directly address the core
+   question — not just tangentially related material. Find at least {MIN_SOURCES} such
+   sources, up to a maximum of {MAX_SOURCES} search calls. If after {MAX_SOURCES} calls you still
+   don't have {MIN_SOURCES} strong sources, stop and report what you found plus what's
    missing — don't keep searching indefinitely.
 2. Output a markdown summary of your findings and the exact URLs you found,
    noting for each source how directly it addresses the question."""
@@ -283,7 +204,7 @@ practitioner_explorer = Agent(
         role="Engineer", 
         source_type="practitioner/production"
     ),
-    tools=[search_github]
+    tools=[search_github, search_tavily]
 )
 
 practitioner_reporter = Agent(
@@ -299,56 +220,56 @@ practitioner_reporter = Agent(
 
 practitioner_sequence = SequentialAgent(name="practitioner_sequence", sub_agents=[practitioner_explorer, practitioner_reporter])
 
+ENSEMBLE_REVIEW_INSTRUCTION = """You are participating in a Peer Review Ensemble.
+You will read two anonymized research reports on the same topic.
+Your job is to evaluate both reports based on their accuracy, insight, and how well they balance academic rigor with real-world engineering feasibility.
+
+Report A:
+{report_a_text}
+
+Report B:
+{report_b_text}
+
+Read both reports directly. State which report is stronger, citing specific claims or evidence from the reports themselves.
+Output your evaluation as a ranking list (e.g. ["A", "B"] if A is better, or ["B", "A"] if B is better) and provide a 1-2 sentence rationale."""
+
+def get_ensemble_instruction(ctx, role: str) -> str:
+    rep_a = ctx.session.state.get('anon_report_a', '{}')
+    rep_b = ctx.session.state.get('anon_report_b', '{}')
+    base = ENSEMBLE_REVIEW_INSTRUCTION.format(report_a_text=rep_a, report_b_text=rep_b)
+    if role == "Researcher":
+        return f"You are a Research Scientist.\n\n{base}"
+    elif role == "Engineer":
+        return f"You are a Software Engineer.\n\n{base}"
+    else:
+        return f"You are a Senior Systems Architect and Principal Investigator.\n\n{base}"
+
 researcher_reviewer = Agent(
     name="researcher_reviewer",
     model=research_model,
-    instruction=lambda ctx: get_review_instruction(ctx, "report_2"),
-    output_schema=PeerReviewResult,
-    output_key="review_researcher"
+    instruction=lambda ctx: get_ensemble_instruction(ctx, "Researcher"),
+    output_schema=JudgeRanking,
+    output_key="rankings_researcher"
 )
 
 engineer_reviewer = Agent(
     name="engineer_reviewer",
     model=eng_model,
-    instruction=lambda ctx: get_review_instruction(ctx, "report_1"),
-    output_schema=PeerReviewResult,
-    output_key="review_engineer"
-)
-
-judge = Agent(
-    name="judge",
-    model=judge_model,
-    instruction=lambda ctx: f"""You are a tiebreaker. Two reviewers evaluated
-two reports and reached conflicting verdicts on which is stronger. Your job is
-to resolve the disagreement, not re-review from scratch.
-
-Report A:
-{ctx.session.state['anon_report_a']}
-
-Report B:
-{ctx.session.state['anon_report_b']}
-
-Reviewer of Report A's verdict: {ctx.session.state.get('review_a_verdict')}
-Reviewer of Report A's reasoning: {ctx.session.state.get('review_a_reason')}
-
-Reviewer of Report B's verdict: {ctx.session.state.get('review_b_verdict')}
-Reviewer of Report B's reasoning: {ctx.session.state.get('review_b_reason')}
-
-Read both reports directly — do not just defer to one reviewer's reasoning
-without checking it against the actual report content. State which report
-is stronger, citing specific claims or evidence from the reports themselves
-(not just "reviewer 1 was right"). If you find both reviewers were
-reasoning from weak or comparable evidence, say so explicitly rather than
-picking arbitrarily — a forced low-confidence pick is still useful, but
-flag the low confidence.
-
-Output: which report wins, your confidence (high/medium/low), and a
-1-2 sentence reason grounded in the report content.""",
-    before_agent_callback=before_judge,
-    after_agent_callback=after_judge,
+    instruction=lambda ctx: get_ensemble_instruction(ctx, "Engineer"),
     output_schema=JudgeRanking,
-    output_key="rankings_judge"
+    output_key="rankings_engineer"
 )
+
+architect_reviewer = Agent(
+    name="architect_reviewer",
+    model=judge_model,
+    instruction=lambda ctx: get_ensemble_instruction(ctx, "Architect"),
+    output_schema=JudgeRanking,
+    output_key="rankings_architect"
+)
+
+fanout = ParallelAgent(name="fanout", sub_agents=[academic_sequence, practitioner_sequence])
+review_fanout = ParallelAgent(name="review_fanout", sub_agents=[researcher_reviewer, engineer_reviewer, architect_reviewer])
 
 synthesis = Agent(
     name="synthesis",
@@ -357,9 +278,6 @@ synthesis = Agent(
     output_schema=SynthesisResult,
     output_key="synthesis_result"
 )
-
-fanout = ParallelAgent(name="fanout", sub_agents=[academic_sequence, practitioner_sequence])
-review_fanout = ParallelAgent(name="review_fanout", sub_agents=[researcher_reviewer, engineer_reviewer])
 
 # ---------------------------------------------------------------------------
 # Pipeline Runner
@@ -372,19 +290,7 @@ async def run_pipeline(topic: str):
     
     await session_service.create_session(app_name="app", user_id=user_id, session_id=session_id)
     
-    def get_state(runner: Runner):
-        # We can extract the state from the session_service
-        # For simplicity we'll just run individual agents if Runner doesn't share state well natively.
-        pass
-
-    # Wait, Runner wraps a single node. We can create a SequentialAgent for Judge and Synthesis, 
-    # but the ParallelAgent executes the fanout.
-    # To keep state consistent across calls, we need a single workflow or we manually pass the session ID.
-    
     print(f"Starting pipeline for topic: {topic}")
-    
-    # Let's create a root agent that orchestrates this, or just run them via Runner.
-    # If we run them sequentially on the same session, they share state!
     
     # 1. Fanout
     runner = Runner(agent=fanout, session_service=session_service, app_name="app")
@@ -410,64 +316,72 @@ async def run_pipeline(topic: str):
     print("=== ENGINEER REPORT ===")
     print(session_obj.state.get("report_2"))
 
-    # 2. Peer Review
+    # Anonymize before reviews
+    reports = {
+        "report_1": session_obj.state.get("report_1"),
+        "report_2": session_obj.state.get("report_2"),
+    }
+    labels = ["A", "B"]
+    random.shuffle(labels)
+    anon_map = {labels[0]: "report_1", labels[1]: "report_2"}
+    
+    def dump(rep):
+        if rep:
+            return rep.model_dump_json() if hasattr(rep, "model_dump_json") else json.dumps(rep)
+        return ""
+        
+    session_obj.state["anon_map"] = anon_map
+    session_obj.state["anon_report_a"] = dump(reports[anon_map["A"]])
+    session_obj.state["anon_report_b"] = dump(reports[anon_map["B"]])
+    # Update state in DB just in case (though InMemorySessionService persists changes)
+    
+    # 2. Peer Review Ensemble
     runner_review = Runner(agent=review_fanout, session_service=session_service, app_name="app")
-    print("Running Stage 2: Peer Review...")
+    print("Running Stage 2: Peer Review Ensemble...")
     
     async for event in runner_review.run_async(
         user_id=user_id,
         session_id=session_id,
-        new_message=Content(parts=[Part(text="Please review the other report.")])
+        new_message=Content(parts=[Part(text="Please evaluate and rank the anonymized reports.")])
     ):
         pass
 
     session_obj = await session_service.get_session(app_name="app", user_id=user_id, session_id=session_id)
-    review_researcher = session_obj.state.get("review_researcher")
-    review_engineer = session_obj.state.get("review_engineer")
     
-    r_defer = review_researcher.defer if hasattr(review_researcher, "defer") else review_researcher.get("defer", False)
-    e_defer = review_engineer.defer if hasattr(review_engineer, "defer") else review_engineer.get("defer", False)
+    # 3. Tally rankings
+    rank_res = session_obj.state.get("rankings_researcher")
+    rank_eng = session_obj.state.get("rankings_engineer")
+    rank_arc = session_obj.state.get("rankings_architect")
+    
+    scores = {"A": 0, "B": 0}
+    reasons = []
+    
+    for r_obj, reviewer_name in [(rank_res, "Researcher"), (rank_eng, "Engineer"), (rank_arc, "Architect")]:
+        if r_obj:
+            lst = r_obj.ranking if hasattr(r_obj, "ranking") else r_obj.get("ranking", [])
+            rat = r_obj.rationale if hasattr(r_obj, "rationale") else r_obj.get("rationale", "")
+            if lst and len(lst) >= 1:
+                # 1st place gets 2 points, 2nd gets 1 point
+                if lst[0] in scores: scores[lst[0]] += 2
+                if len(lst) > 1 and lst[1] in scores: scores[lst[1]] += 1
+            reasons.append(f"{reviewer_name} rationale: {rat}")
 
-    # 3. Judge (if needed)
-    delta_state = {}
-    needs_judge = False
-    if r_defer and not e_defer:
-        # Researcher defers to Engineer, Engineer favors its own
-        delta_state["winning_report_id"] = "report_2"
-        delta_state["peer_review_rationale"] = "Net agreement to use engineer's report."
-    elif not r_defer and e_defer:
-        # Engineer defers to Researcher, Researcher favors its own
-        delta_state["winning_report_id"] = "report_1"
-        delta_state["peer_review_rationale"] = "Net agreement to use researcher's report."
-    else:
-        # Genuine disagreement or tie
-        needs_judge = True
-        
-    if needs_judge:
-        print("Running Stage 3: Independent Evaluation (Tie-breaker)...")
-        runner_judge = Runner(agent=judge, session_service=session_service, app_name="app")
-        async for event in runner_judge.run_async(
-            user_id=user_id, 
-            session_id=session_id,
-            state_delta=delta_state,
-            new_message=Content(parts=[Part(text="Please evaluate the reports.")])
-        ):
-            pass
-        
-        session_obj = await session_service.get_session(app_name="app", user_id=user_id, session_id=session_id)
-        winning_report_id = session_obj.state.get("winning_report_id")
-        print(f"Winning report ID from Judge: {winning_report_id}")
-    else:
-        winning_report_id = delta_state.get("winning_report_id")
-        print(f"Winning report ID from Peer Review: {winning_report_id}")
+    top_label = "A" if scores["A"] >= scores["B"] else "B"
+    winning_report_id = anon_map.get(top_label, "report_1")
+    
+    delta_state = {
+        "winning_report_id": winning_report_id,
+        "peer_review_rationale": " | ".join(reasons)
+    }
+    
+    print(f"Winning report ID from Ensemble: {winning_report_id} (Scores: {scores})")
     
     # 4. Synthesis with retry loop
-    print("Running Stage 4: Synthesis & Persistence...")
+    print("Running Stage 3: Synthesis & Persistence...")
     max_retries = 2
     for attempt in range(max_retries + 1):
         if attempt > 0:
             print(f"Synthesis validation failed. Retrying (attempt {attempt}/{max_retries})...")
-            # We inject the error into state
             session_obj.state.update({"validation_error": "Previous attempt included hallucinated URLs. Only use URLs present in the original reports."})
             
         runner_synth = Runner(agent=synthesis, session_service=session_service, app_name="app")
@@ -482,18 +396,14 @@ async def run_pipeline(topic: str):
         session_obj = await session_service.get_session(app_name="app", user_id=user_id, session_id=session_id)
         result = session_obj.state.get("synthesis_result")
         
-        # Clear delta_state after first attempt so we only merge it once (or we can keep it, it's fine)
-        # But we must ensure validation error clears if we retry
         delta_state = {}
         if not result:
             print("No synthesis result produced.")
             continue
             
-        # Parse result
         urls_cited = result.urls_cited if hasattr(result, "urls_cited") else result.get("urls_cited", [])
         markdown = result.markdown if hasattr(result, "markdown") else result.get("markdown", "")
         
-        # Validation
         valid_urls = set()
         for rep_key in ["report_1", "report_2"]:
             rep = session_obj.state.get(rep_key)

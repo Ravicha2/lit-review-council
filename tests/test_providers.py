@@ -1,0 +1,39 @@
+import pytest
+from unittest.mock import patch, Mock
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from src.providers import TavilyProvider
+
+def test_tavily_provider_search():
+    with patch("src.providers.requests.post") as mock_post:
+        mock_resp = Mock()
+        mock_resp.json.return_value = {
+            "results": [
+                {
+                    "title": "Tavily Result",
+                    "url": "https://tavily.com",
+                    "content": "Some content",
+                    "raw_content": "Raw content here"
+                }
+            ]
+        }
+        mock_resp.raise_for_status = Mock()
+        mock_post.return_value = mock_resp
+
+        with patch.dict(os.environ, {"TAVILY_API_KEY": "fake_key"}):
+            provider = TavilyProvider()
+            results = provider.search("test query", max_results=2)
+            
+            assert len(results) == 1
+            assert results[0].title == "Tavily Result"
+            assert results[0].url == "https://tavily.com"
+            assert results[0].snippet == "Some content"
+            assert results[0].content == "Raw content here"
+            
+            mock_post.assert_called_once()
+            args, kwargs = mock_post.call_args
+            assert "api.tavily.com/search" in args[0]
+            assert kwargs["json"]["api_key"] == "fake_key"
+            assert kwargs["json"]["query"] == "test query"
+            assert kwargs["json"]["max_results"] == 2
