@@ -1,0 +1,25 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# IDEs and Tools
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Generated logs/files
+litreview_log.md
+test_adk.py
