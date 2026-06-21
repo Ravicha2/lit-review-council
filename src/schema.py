@@ -62,7 +62,7 @@ class JudgeRanking(BaseModel):
 
 class SynthesisResult(BaseModel):
     markdown: str
-    references: List[Reference]
+    references: List[Reference] = Field(default_factory=list)
 
 class GatheredSources(BaseModel):
     notes: str

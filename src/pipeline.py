@@ -344,13 +344,21 @@ async def run_pipeline(topic: str, session_id: str, output_dir: str, prior_conte
     max_retries = 2
     for attempt in range(max_retries + 1):
         runner_synth = Runner(agent=synthesis, session_service=session_service, app_name="app")
-        async for event in runner_synth.run_async(
-            user_id=user_id, 
-            session_id=session_id,
-            state_delta=delta_state,
-            new_message=Content(parts=[Part(text="Please synthesize the final report.")])
-        ):
-            pass
+        try:
+            async for event in runner_synth.run_async(
+                user_id=user_id, 
+                session_id=session_id,
+                state_delta=delta_state,
+                new_message=Content(parts=[Part(text="Please synthesize the final report.")])
+            ):
+                pass
+        except Exception as e:
+            print(f"ADK Runner exception during synthesis: {e}")
+            if attempt < max_retries:
+                delta_state = {"validation_error": f"JSON Schema validation failed: {str(e)}. Make sure to output exactly the requested schema."}
+                continue
+            else:
+                raise ValueError(f"Failed to synthesize after {max_retries} retries due to runner exception: {e}")
             
         session_obj = await session_service.get_session(app_name="app", user_id=user_id, session_id=session_id)
         result = session_obj.state.get("synthesis_result")

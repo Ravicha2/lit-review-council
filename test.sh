@@ -1,1 +1,1 @@
-uv run python main.py --config topic_key2.yaml --output okf_output --question "Graph-based memory management analysis"
+uv run python main.py --config topic_key3.yaml --output okf_topic_temp --question "Graph-based memory management analysis"

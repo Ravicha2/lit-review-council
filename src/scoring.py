@@ -44,29 +44,41 @@ def validate_synthesis_citations(markdown_text: str, synth_references: List[Opti
     # Step 1: Check for forbidden dangling formats (Author, Year) or [1]
     # \([A-Z][a-z\s]+, \d{4}\) catches (Smith, 2024) or (OpenAI, 2024)
     # \[\d+\] catches [1], [2], etc.
-    dangling_regex = r'(\([A-Z][A-Za-z\s]+, \d{4}\)|\[\d+\])'
+    dangling_regex = r'(\([A-Z][A-Za-z\s]+, \d{4}\)|\[\d+\](?!\())'
     if re.search(dangling_regex, markdown_text):
         return (
             "Dangling citation format detected. DO NOT use (Author, Year) or [1] style citations. "
             "You MUST use inline Markdown links: [Source Title](URL) for every citation."
         )
 
+    import urllib.parse
+    def normalize_url(u: str) -> str:
+        p = urllib.parse.urlparse(u)
+        path = p.path.rstrip('.,;!?/')
+        netloc = p.netloc.lower()
+        if netloc.startswith('www.'):
+            netloc = netloc[4:]
+        return f"{netloc}{path}"
+
     # Step 2: Extract all Markdown URLs from the body text
     markdown_links = re.findall(r'\[.*?\]\((https?://[^\)]+)\)', markdown_text)
-    markdown_urls = set(url.strip().lower() for url in markdown_links)
+    markdown_urls = set(normalize_url(url.strip()) for url in markdown_links)
 
     # Step 3: Extract URLs from the synthesis references array
     synth_urls = set()
+    synth_url_map = {} # Keep original for error messages
     for ref in synth_references:
         if ref:
             url = ref.url if hasattr(ref, "url") else ref.get("url", "")
             if url:
-                synth_urls.add(url.strip().lower())
+                norm_url = normalize_url(url.strip())
+                synth_urls.add(norm_url)
+                synth_url_map[norm_url] = url
 
     # Step 4: Verify every extracted URL exists in the synth_references array
     for url in markdown_urls:
         if url not in synth_urls:
-            return f"URL {url} was cited in the text but not found in your references list."
+            return f"URL {url} (normalized) was cited in the text but not found in your references list."
 
     # Step 5: Verify every URL in synth_references exists in the original source_reports
     valid_source_urls: Set[str] = set()
@@ -76,11 +88,12 @@ def validate_synthesis_citations(markdown_text: str, synth_references: List[Opti
             for ref in refs:
                 url = ref.url if hasattr(ref, "url") else ref.get("url", "")
                 if url:
-                    valid_source_urls.add(url.strip().lower())
+                    valid_source_urls.add(normalize_url(url.strip()))
 
-    for url in synth_urls:
-        if url not in valid_source_urls:
-            return f"URL {url} is hallucinated or not present in the original reports' references. Only cite provided sources."
+    for norm_url in synth_urls:
+        if norm_url not in valid_source_urls:
+            orig_url = synth_url_map[norm_url]
+            return f"URL {orig_url} is hallucinated or not present in the original reports' references. Only cite provided sources."
 
     return None
 
