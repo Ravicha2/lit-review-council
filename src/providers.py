@@ -148,6 +148,56 @@ class TavilyProvider(BaseProvider):
             ))
         return results
 
+class OpenAlexProvider(BaseProvider):
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=2, max=20),
+        retry=retry_if_exception(is_retryable_http_error),
+        reraise=True
+    )
+    def search(self, query: str) -> list[SearchResult]:
+        url = "https://api.openalex.org/works"
+        params = {
+            "search": query,
+            "per-page": 5
+        }
+        
+        api_key = os.getenv("OPENALEX_API_KEY")
+        if api_key:
+            params["api_key"] = api_key
+            
+        r = requests.get(url, params=params, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        
+        results = []
+        for item in data.get("results", []):
+            title = item.get("title") or ""
+            url_text = item.get("id") or ""
+            
+            # Reconstruct abstract from inverted index
+            abstract = ""
+            inverted_index = item.get("abstract_inverted_index")
+            if inverted_index:
+                max_pos = max([pos for positions in inverted_index.values() for pos in positions], default=-1)
+                if max_pos >= 0:
+                    words = [""] * (max_pos + 1)
+                    for word, positions in inverted_index.items():
+                        for pos in positions:
+                            words[pos] = word
+                    abstract = " ".join(words).strip()
+            
+            # Ensure we don't have massive whitespace gaps
+            abstract = " ".join(abstract.split())
+            
+            results.append(SearchResult(
+                title=title,
+                url=url_text,
+                snippet=abstract[:500] if abstract else "",
+                content=abstract
+            ))
+        return results
+
 def create_adk_tool(provider: BaseProvider, name: str, description: str) -> Callable[[str], list[dict]]:
     """
     Wraps a SearchProvider into an ADK-compatible tool function.

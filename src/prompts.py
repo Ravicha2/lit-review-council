@@ -66,6 +66,10 @@ CRITICAL: You MUST output your final response as a valid JSON object matching ex
    - rejected: You evaluated this source but found it irrelevant or weak, so you did not cite it in the body.
    - unevaluated: You found this source but did not evaluate it.
 
+CRITICAL CITATION FORMAT: When you cite a source in the body text, you MUST include its exact URL as an inline Markdown link. 
+Example: `This is a claim [Source Title](https://example.com/url)`.
+DO NOT use footnotes like `[1]` or `(Author, Year)` without the URL. If the URL is missing from the body text, the system will reject your output.
+
 JSON FORMATTING RULE: You MUST properly escape all JSON string values. For the 'body' field, any newlines MUST be written as `\\n` instead of actual newline characters. DO NOT include any raw control characters in strings."""
 
 ENSEMBLE_REVIEW_INSTRUCTION = """You are participating in a Peer Review Ensemble.

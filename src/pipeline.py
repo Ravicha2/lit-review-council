@@ -34,12 +34,18 @@ from src.prompts import EXPLORER_INSTRUCTION_TEMPLATE, REPORTER_INSTRUCTION_TEMP
 # Tools
 # ---------------------------------------------------------------------------
 
-from src.providers import ArxivProvider, GithubProvider, TavilyProvider, create_adk_tool
+from src.providers import ArxivProvider, GithubProvider, TavilyProvider, OpenAlexProvider, create_adk_tool
 
 search_arxiv = create_adk_tool(
     ArxivProvider(), 
     name="search_arxiv", 
     description="Search arXiv for academic papers matching the query using the official API."
+)
+
+search_openalex = create_adk_tool(
+    OpenAlexProvider(),
+    name="search_openalex",
+    description="Search OpenAlex for academic papers matching the query using the official API."
 )
 
 search_github = create_adk_tool(
@@ -100,6 +106,32 @@ async def write_to_filesystem_mcp(content: str, path: str):
 # Agents
 # ---------------------------------------------------------------------------
 
+from google.adk.agents import BaseAgent, LoopAgent
+from google.adk.agents.invocation_context import InvocationContext
+from google.adk.events import Event, EventActions
+from typing import AsyncGenerator
+from src.schema import validate_report
+
+class ReportValidationAgent(BaseAgent):
+    report_key: str
+
+    async def _run_async_impl(
+        self, ctx: InvocationContext
+    ) -> AsyncGenerator[Event, None]:
+        report = ctx.session.state.get(self.report_key)
+        if not report:
+            yield Event(author=self.name, content=Content(parts=[Part(text="No report found in state.")]))
+            return
+            
+        error_msg = validate_report(report)
+        if error_msg:
+            yield Event(
+                author=self.name, 
+                content=Content(parts=[Part(text=f"Validation failed: {error_msg}\nPlease rewrite your report and ensure citations strictly follow the rules.")])
+            )
+        else:
+            yield Event(author=self.name, actions=EventActions(escalate=True))
+
 academic_explorer = Agent(
     name="academic_explorer",
     model=research_model,
@@ -109,7 +141,7 @@ academic_explorer = Agent(
         MIN_SOURCES=MIN_SOURCES,
         MAX_SOURCES=MAX_SOURCES
     ),
-    tools=[search_arxiv, search_tavily_researcher]
+    tools=[search_arxiv, search_openalex, search_tavily_researcher]
 )
 
 academic_reporter = Agent(
@@ -123,7 +155,16 @@ academic_reporter = Agent(
     output_key="report_1"
 )
 
-academic_sequence = SequentialAgent(name="academic_sequence", sub_agents=[academic_explorer, academic_reporter])
+academic_reporter_loop = LoopAgent(
+    name="academic_reporter_loop",
+    sub_agents=[
+        academic_reporter,
+        ReportValidationAgent(name="academic_validator", report_key="report_1")
+    ],
+    max_iterations=3
+)
+
+academic_sequence = SequentialAgent(name="academic_sequence", sub_agents=[academic_explorer, academic_reporter_loop])
 
 practitioner_explorer = Agent(
     name="practitioner_explorer",
@@ -148,7 +189,16 @@ practitioner_reporter = Agent(
     output_key="report_2"
 )
 
-practitioner_sequence = SequentialAgent(name="practitioner_sequence", sub_agents=[practitioner_explorer, practitioner_reporter])
+practitioner_reporter_loop = LoopAgent(
+    name="practitioner_reporter_loop",
+    sub_agents=[
+        practitioner_reporter,
+        ReportValidationAgent(name="practitioner_validator", report_key="report_2")
+    ],
+    max_iterations=3
+)
+
+practitioner_sequence = SequentialAgent(name="practitioner_sequence", sub_agents=[practitioner_explorer, practitioner_reporter_loop])
 
 researcher_reviewer = Agent(
     name="researcher_reviewer",

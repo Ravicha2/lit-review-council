@@ -22,28 +22,29 @@ class Report(BaseModel):
     body: str
     references: List[ExploredReference]
 
-    @model_validator(mode='after')
-    def validate_usage_tags(self):
-        raw_body_urls = re.findall(r'https?://[^\s)\]"\'<>]+', self.body)
-        
-        def normalize_url(url: str) -> str:
-            u = urllib.parse.urlparse(url)
-            path = u.path.rstrip('.,;!?/')
-            netloc = u.netloc
-            if netloc.startswith('www.'):
-                netloc = netloc[4:]
-            return f"{netloc}{path}"
-        
-        body_urls = {normalize_url(u) for u in raw_body_urls}
-        
-        for ref in self.references:
-            norm_ref = normalize_url(ref.url)
-            if ref.usage == "cited" and norm_ref not in body_urls:
-                raise ValueError(f"Reference '{ref.url}' is tagged as 'cited' but was not found in the body text.")
-            elif ref.usage in ["rejected", "unevaluated"] and norm_ref in body_urls:
-                raise ValueError(f"Reference '{ref.url}' is tagged as '{ref.usage}' but was actually cited in the body text.")
-                
-        return self
+def validate_report(report: Report | dict) -> str | None:
+    if isinstance(report, dict):
+        report = Report(**report)
+    raw_body_urls = re.findall(r'https?://[^\s)\]"\'<>]+', report.body)
+    
+    def normalize_url(url: str) -> str:
+        u = urllib.parse.urlparse(url)
+        path = u.path.rstrip('.,;!?/')
+        netloc = u.netloc
+        if netloc.startswith('www.'):
+            netloc = netloc[4:]
+        return f"{netloc}{path}"
+    
+    body_urls = {normalize_url(u) for u in raw_body_urls}
+    
+    for ref in report.references:
+        norm_ref = normalize_url(ref.url)
+        if ref.usage == "cited" and norm_ref not in body_urls:
+            return f"Reference '{ref.url}' is tagged as 'cited' but was not found in the body text. You MUST include the exact URL in the body text as an inline markdown link."
+        elif ref.usage in ["rejected", "unevaluated"] and norm_ref in body_urls:
+            return f"Reference '{ref.url}' is tagged as '{ref.usage}' but was actually cited in the body text. Change the usage tag to 'cited'."
+            
+    return None
 
 class Review(BaseModel):
     score: float

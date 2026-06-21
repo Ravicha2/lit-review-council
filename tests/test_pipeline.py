@@ -35,13 +35,17 @@ def test_agent_instructions_contain_formatting_and_search_limits():
         assert "properly escape all JSON string" in agent.instruction
 
 def test_sequential_agents_compose_correctly():
-    from src.pipeline import academic_explorer, academic_reporter, academic_sequence
-    from src.pipeline import practitioner_explorer, practitioner_reporter, practitioner_sequence
+    from src.pipeline import academic_explorer, academic_reporter_loop, academic_sequence
+    from src.pipeline import practitioner_explorer, practitioner_reporter_loop, practitioner_sequence
     from google.adk.agents import SequentialAgent
     
     assert isinstance(academic_sequence, SequentialAgent)
     assert academic_sequence.sub_agents[0] == academic_explorer
-    assert academic_sequence.sub_agents[1] == academic_reporter
+    assert academic_sequence.sub_agents[1] == academic_reporter_loop
+
+    assert isinstance(practitioner_sequence, SequentialAgent)
+    assert practitioner_sequence.sub_agents[0] == practitioner_explorer
+    assert practitioner_sequence.sub_agents[1] == practitioner_reporter_loop
 
 from src.pipeline import run_pipeline, InMemorySessionService
 
