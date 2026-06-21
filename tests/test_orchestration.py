@@ -421,3 +421,36 @@ class TestDistiller:
         })
         with pytest.raises(Exception):
             parse_distiller_output(llm_output)
+# ---------------------------------------------------------------------------
+# 9. Orchestrate Entrypoint
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_orchestrate_accepts_config_object(monkeypatch):
+    from src.orchestration import orchestrate, Config, TopicConfig, PipelinePlan
+    
+    # Mock run_planner to return a simple plan
+    async def mock_run_planner(topics):
+        return PipelinePlan(wave1=[t.slug for t in topics], wave2={})
+    monkeypatch.setattr("src.orchestration.run_planner", mock_run_planner)
+    
+    # Mock run_pipeline to return dummy markdown
+    async def mock_run_pipeline(slug, session_id, output_dir, prior_context):
+        return f"# {slug}"
+    monkeypatch.setattr("src.orchestration.run_pipeline", mock_run_pipeline)
+    
+    # Mock run_distiller
+    from src.orchestration import DistilledContext
+    async def mock_run_distiller(topic, markdown):
+        return DistilledContext(key_terms=[], conclusion="Done", top_urls=[])
+    monkeypatch.setattr("src.orchestration.run_distiller", mock_run_distiller)
+    
+    config = Config(topics=[TopicConfig(slug="test-topic", description="desc", search_keywords=["key"])])
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Pass the Config object instead of a path
+        await orchestrate(config=config, output_dir=tmpdir, research_question="test")
+        
+        # Verify it wrote the output
+        assert (Path(tmpdir) / "test-topic.md").exists()
+        assert (Path(tmpdir) / "index.md").exists()

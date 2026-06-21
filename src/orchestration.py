@@ -254,8 +254,7 @@ Ensure top_urls contains a maximum of 5 references. Do not include markdown back
         
     return parse_distiller_output(text)
 
-async def orchestrate(config_path: str, output_dir: str, research_question: str):
-    config = load_config(config_path)
+async def orchestrate(config: Config, output_dir: str, research_question: str):
     
     print("Running planner...")
     plan = await run_planner(config.topics)

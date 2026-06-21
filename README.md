@@ -116,6 +116,21 @@ The synthesis step warns when more than half of cited sources are blog_or_forum 
 
 ## Usage
 
+The pipeline can be executed either programmatically as an MCP tool by an AI agent, or manually via the CLI.
+
+### 1. Using the MCP Server (For Agents)
+
+If you are an agent connected to this workspace, you can use the built-in MCP server to conduct a literature review without writing any configuration files.
+
+1. Start the MCP server:
+   ```bash
+   uv run python src/mcp_server.py
+   ```
+2. The server exposes the `conduct_literature_review` tool. Formulate the topics and pass them as a JSON array along with the overarching research question directly to the tool. 
+3. See the agent skill documentation at [skills/lit-review-council/SKILL.md](skills/lit-review-council/SKILL.md) for full instructions on framing the research question and executing the pipeline.
+
+### 2. Using the CLI (Manual)
+
 1. Define your research topics in a `topics.yaml` file:
    ```yaml
    topics:
@@ -126,7 +141,7 @@ The synthesis step warns when more than half of cited sources are blog_or_forum 
 
 2. Run the orchestrator pipeline:
    ```bash
-   uv run python main.py --config topic_key1.yaml --output okf_output --question "Overarching Research Question"
+   uv run python main.py --config topics.yaml --output okf_output --question "Overarching Research Question"
    ```
 
 ### Output

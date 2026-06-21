@@ -15,8 +15,11 @@ async def main():
     print(f"Research Question: {args.question}")
     print("-" * 50)
     
+    from src.orchestration import load_config
+    config = load_config(args.config)
+    
     await orchestrate(
-        config_path=args.config, 
+        config=config, 
         output_dir=args.output, 
         research_question=args.question
     )
