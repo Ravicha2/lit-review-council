@@ -28,7 +28,7 @@ from mcp.client.stdio import stdio_client
 
 from src.schema import Reference, Report, JudgeRanking, SynthesisResult, PeerReviewResult
 from src.scoring import generate_anonymization_map, tally_ensemble_rankings, validate_synthesis_citations, check_blog_tier_ratio
-from src.prompts import EXPLORER_INSTRUCTION_TEMPLATE, REPORTER_INSTRUCTION_TEMPLATE, build_ensemble_instruction, build_synthesis_prompt
+from src.prompts import build_explorer_instruction, REPORTER_INSTRUCTION_TEMPLATE, build_ensemble_instruction, build_synthesis_prompt
 
 # ---------------------------------------------------------------------------
 # Tools
@@ -135,11 +135,12 @@ class ReportValidationAgent(BaseAgent):
 academic_explorer = Agent(
     name="academic_explorer",
     model=research_model,
-    instruction=EXPLORER_INSTRUCTION_TEMPLATE.format(
+    instruction=lambda ctx: build_explorer_instruction(
         role="Researcher", 
         source_type="academic",
-        MIN_SOURCES=MIN_SOURCES,
-        MAX_SOURCES=MAX_SOURCES
+        min_sources=MIN_SOURCES,
+        max_sources=MAX_SOURCES,
+        prior_context=ctx.session.state.get("prior_context")
     ),
     tools=[search_arxiv, search_openalex, search_tavily_researcher]
 )
@@ -169,11 +170,12 @@ academic_sequence = SequentialAgent(name="academic_sequence", sub_agents=[academ
 practitioner_explorer = Agent(
     name="practitioner_explorer",
     model=eng_model,
-    instruction=EXPLORER_INSTRUCTION_TEMPLATE.format(
+    instruction=lambda ctx: build_explorer_instruction(
         role="Engineer", 
         source_type="practitioner/production",
-        MIN_SOURCES=MIN_SOURCES,
-        MAX_SOURCES=MAX_SOURCES
+        min_sources=MIN_SOURCES,
+        max_sources=MAX_SOURCES,
+        prior_context=ctx.session.state.get("prior_context")
     ),
     tools=[search_github, search_tavily_engineer]
 )
@@ -259,7 +261,7 @@ synthesis = Agent(
 # Pipeline Runner
 # ---------------------------------------------------------------------------
 
-async def run_pipeline(topic: str):
+async def run_pipeline(topic: str, prior_context: str | None = None) -> str | None:
     session_service = InMemorySessionService()
     session_id = "sess1"
     user_id = "user1"
@@ -275,7 +277,8 @@ async def run_pipeline(topic: str):
     init_state = {
         "topic": topic,
         "topic_slug": topic.lower().replace(" ", "-"),
-        "validation_error": None
+        "validation_error": None,
+        "prior_context": prior_context
     }
     
     async for event in runner.run_async(
@@ -387,8 +390,7 @@ async def run_pipeline(topic: str):
         validation_error = validate_synthesis_citations(markdown, synth_references, source_reports)
         
         if not validation_error:
-            log_path = "litreview_log.md"
-            print("Synthesis successful. Writing to log via MCP...")
+            print("Synthesis successful. Returning markdown.")
             
             # Check source trust ratio
             tier_flag = check_blog_tier_ratio(synth_references)
@@ -401,9 +403,7 @@ async def run_pipeline(topic: str):
                     title = ref.title if hasattr(ref, "title") else ref.get("title", "Untitled")
                     url = ref.url if hasattr(ref, "url") else ref.get("url", "")
                     markdown += f"{i}. [{title}]({url})\n"
-            await write_to_filesystem_mcp(markdown, log_path)
-            print("Done!")
-            break
+            return markdown
         elif attempt == max_retries:
             raise ValueError(f"Failed to synthesize valid citations after {max_retries} retries. Error: {validation_error}")
         else:

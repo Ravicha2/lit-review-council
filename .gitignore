@@ -24,3 +24,7 @@ ENV/
 litreview*
 test_adk.py
 search_key.txt
+*key*.yaml
+*key*.md
+okf*
+

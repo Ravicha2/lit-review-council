@@ -1,18 +1,39 @@
 # Domain Context
 
-## Pipeline Stages
+## Glossary
 
-- **Stage 1 (Research Fan-out)**: Agents perform independent research. Strict **Source Isolation** is enforced at the code level by dynamically appending domain filters (e.g., `site:arxiv.org` for Researcher, `site:github.com` for Engineer) to the search tool, ensuring no overlap in raw source material.
-- **Stage 2 (Independent Evaluation)**: A dedicated "Judge" agent (which did not author any reports) evaluates and ranks the anonymized reports. This eliminates self-preference bias. The Judge determines the winning report based on accuracy and insight without knowing which role authored which report.
-- **Stage 3 (Synthesis & Persistence)**: A final agent writes the briefed markdown. A strict **URL Validation** step ensures every cited URL exists in the upstream reports, using **URL Normalization** (stripping scheme, `www`, trailing slashes, and sorting query params) to prevent false-positive failures from minor LLM formatting differences.
+- **Wave 1**: Topics that run independently, with no prior context. Determined by the Planner agent.
+- **Wave 2**: Topics that benefit from Wave 1 context. Each Wave 2 topic receives distilled summaries from its Wave 1 dependencies.
+- **Planner**: An LLM agent that reads topic configs and outputs a `PipelinePlan` (wave assignments + dependency mapping).
+- **Distiller**: An LLM agent that condenses a full synthesis report into `DistilledContext` (key terms, conclusion, top URLs). Used to pass context from Wave 1 to Wave 2.
+- **OKF (Open Knowledge Format)**: Output format for the pipeline. Each topic is a concept file with YAML frontmatter in a directory bundle, with cross-links between related topics.
+- **Prior Context**: Distilled summary from Wave 1 topics, injected into Wave 2 explorer prompts. Explorers use it to refine search queries but must not cite it directly.
+
+## Multi-Topic Orchestration
+
+For arbitrary topic lists, the pipeline runs in two waves:
+
+1. **Planner** reads the topic config YAML and produces a `PipelinePlan`.
+2. **Wave 1** runs all independent topics in parallel (each is a full `run_pipeline` call).
+3. **Distiller** produces a `DistilledContext` per Wave 1 topic.
+4. **Wave 2** runs dependent topics in parallel, each receiving prior context from its Wave 1 dependencies.
+5. **OKF writer** outputs all results as a concept bundle directory.
+
+If a Wave 1 topic fails, its distillation is set to empty string. Wave 2 topics that depended on it still run, just without that context. Max 3 distillations per Wave 2 topic to control token budget.
+
+## Single-Topic Pipeline Stages
+
+- **Stage 1 (Research Fan-out)**: Agents perform independent research. Strict **Source Isolation** is enforced at the code level by dynamically appending domain filters to the search tool.
+- **Stage 2 (Peer Review Ensemble)**: Three reviewers evaluate anonymized reports. Borda-count voting aggregates rankings.
+- **Stage 3 (Synthesis & Persistence)**: A final agent writes the briefed markdown. **URL Validation** ensures every cited URL exists in upstream reports.
 
 ## Infrastructure
 
-- **Kaggle MCP Requirement**: Satisfied using the official `@modelcontextprotocol/server-filesystem` executed via `npx` for the file-write tool, avoiding the complexity of building a custom Python MCP server while still meeting rubric constraints.
+- **Kaggle MCP Requirement**: Satisfied using the official `@modelcontextprotocol/server-filesystem` executed via `npx` for the file-write tool.
 
 ## Architecture Patterns
 
-- **GatheredSources**: A lightweight Pydantic schema used to pass data from the `Gatherer` node to the `Validator` node in the ADK workflow. It separates unstructured reasoning (`notes: str`) from strictly parsed data (`urls: list[str]`), allowing the Python validator to cleanly count `len(node_input.urls)` without brittle regex parsing.
-- **Validator Loop Directive**: When the `Validator` node routes back to the `Gatherer` (e.g., due to insufficient sources), it returns a specific string directive in its `Event.output`. This acts as the `node_input` for the `Gatherer`'s next turn, explicitly prompting it to use different search keywords and preventing infinite loops over identical search results.
-- **Top-Level Workflow Fan-Out**: The entire pipeline orchestrates concurrency by using a parent `Workflow` with a fan-out edge `('START', (research_workflow, engineer_workflow))` and a `JoinNode` to fan-in, rather than relying on the deprecated `ParallelAgent` class or manual `asyncio.gather` scripts.
-- **Validator State Aggregation**: The Python `Validator` node acts as the state accumulator. Across multiple loops, it shallow-merges the `GatheredSources` (`node_input`) into `ctx.state` arrays. Once conditions are met, it yields the combined arrays as its final `Event.output` for the `Reporter` node.
+- **Validator Loop Directive**: When the `Validator` node routes back to the `Gatherer`, it returns a string directive prompting different search keywords.
+- **Top-Level Workflow Fan-Out**: Concurrency via `ParallelAgent` for fan-out and `SequentialAgent` within each track.
+- **Validator State Aggregation**: The `Validator` node shallow-merges `GatheredSources` across loops until conditions are met.
+- **OKF Output Bundle**: Each topic produces a concept file with YAML frontmatter (`type`, `title`, `description`, `tags`, `timestamp`, `resource`). The `resource` field points to `./slug.md#references`. An `index.md` links all topics.

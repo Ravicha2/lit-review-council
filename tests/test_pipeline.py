@@ -28,8 +28,16 @@ def test_agent_instructions_contain_formatting_and_search_limits():
     import src.pipeline
     importlib.reload(src.pipeline)
     
-    assert "maximum of 10 search calls" in src.pipeline.academic_explorer.instruction
-    assert "at least 5 such" in src.pipeline.academic_explorer.instruction
+    class DummySession:
+        state = {}
+    class DummyContext:
+        session = DummySession()
+        
+    ctx = DummyContext()
+    academic_instr = src.pipeline.academic_explorer.instruction(ctx)
+    
+    assert "maximum of 10 search calls" in academic_instr
+    assert "at least 5 such" in academic_instr
     
     for agent in [src.pipeline.academic_reporter, src.pipeline.practitioner_reporter]:
         assert "properly escape all JSON string" in agent.instruction

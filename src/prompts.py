@@ -12,6 +12,17 @@ question using {source_type} sources.
 2. Output a markdown summary of your findings and the exact URLs you found,
    noting for each source how directly it addresses the question."""
 
+def build_explorer_instruction(role: str, source_type: str, min_sources: int, max_sources: int, prior_context: Optional[str] = None) -> str:
+    prompt = EXPLORER_INSTRUCTION_TEMPLATE.format(
+        role=role,
+        source_type=source_type,
+        MIN_SOURCES=min_sources,
+        MAX_SOURCES=max_sources
+    )
+    if prior_context:
+        prompt += f"\n\nPrior research context:\n{prior_context}\n\nCRITICAL RULE: Use this prior context to refine your search queries and vocabulary, but DO NOT cite these prior findings directly in your output. You must find your own primary sources."
+    return prompt
+
 REPORTER_INSTRUCTION_TEMPLATE = """You are a {role} synthesizing a final report
 from the research context gathered below.
 
