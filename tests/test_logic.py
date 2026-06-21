@@ -2,7 +2,7 @@ import pytest
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from src.schema import Report, Reference, Review
+from src.schema import Report, Reference, Review, ExploredReference
 from src.logic import anonymize_reports, deanonymize_reviews
 
 def test_anonymize_reports():
@@ -49,7 +49,7 @@ def test_normalize_url():
 
 def test_validate_citations():
     reports = [
-        Report(title="T1", body="B1", references=[Reference(title="R1", url="https://example.com/test/")])
+        Report(title="T1", body="B1 [link](https://example.com/test/)", references=[ExploredReference(title="R1", url="https://example.com/test/", source_tier="peer_reviewed", usage="cited")])
     ]
     
     # Should pass (normalized matches)

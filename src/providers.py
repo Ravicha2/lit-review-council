@@ -96,6 +96,10 @@ class GithubProvider(BaseProvider):
         return results
 
 class TavilyProvider(BaseProvider):
+    def __init__(self, include_domains: list[str] = None, exclude_domains: list[str] = None):
+        self.include_domains = include_domains
+        self.exclude_domains = exclude_domains
+
     @retry(
         stop=stop_after_attempt(5),
         wait=wait_exponential(multiplier=1, min=2, max=20),
@@ -116,6 +120,11 @@ class TavilyProvider(BaseProvider):
             "include_raw_content": True
         }
         
+        if self.include_domains:
+            payload["include_domains"] = self.include_domains
+        if self.exclude_domains:
+            payload["exclude_domains"] = self.exclude_domains
+        
         r = requests.post(url, json=payload, timeout=15)
         r.raise_for_status()
         data = r.json()
@@ -126,6 +135,10 @@ class TavilyProvider(BaseProvider):
             url_text = item.get("url") or ""
             content = item.get("content") or ""
             raw_content = item.get("raw_content") or content
+            
+            # Truncate raw content to prevent massive context bloat
+            if raw_content and len(raw_content) > 8000:
+                raw_content = raw_content[:8000]
             
             results.append(SearchResult(
                 title=title,

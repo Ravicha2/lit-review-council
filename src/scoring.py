@@ -34,21 +34,71 @@ def tally_ensemble_rankings(rankings: List[Optional[Any]]) -> Tuple[str, List[st
     top_label = "A" if scores["A"] >= scores["B"] else "B"
     return top_label, reasons
 
-def extract_hallucinated_urls(cited_urls: List[str], source_reports: List[Optional[Any]]) -> List[str]:
+import re
+
+def validate_synthesis_citations(markdown_text: str, synth_references: List[Optional[Any]], source_reports: List[Optional[Any]]) -> Optional[str]:
     """
-    Returns URLs that were cited but not present in the original reports.
+    Validates the synthesis report for strict citation grounding.
+    Returns an error message string if validation fails, or None if it passes.
     """
-    valid_urls: Set[str] = set()
+    # Step 1: Check for forbidden dangling formats (Author, Year) or [1]
+    # \([A-Z][a-z\s]+, \d{4}\) catches (Smith, 2024) or (OpenAI, 2024)
+    # \[\d+\] catches [1], [2], etc.
+    dangling_regex = r'(\([A-Z][A-Za-z\s]+, \d{4}\)|\[\d+\])'
+    if re.search(dangling_regex, markdown_text):
+        return (
+            "Dangling citation format detected. DO NOT use (Author, Year) or [1] style citations. "
+            "You MUST use inline Markdown links: [Source Title](URL) for every citation."
+        )
+
+    # Step 2: Extract all Markdown URLs from the body text
+    markdown_links = re.findall(r'\[.*?\]\((https?://[^\)]+)\)', markdown_text)
+    markdown_urls = set(url.strip().lower() for url in markdown_links)
+
+    # Step 3: Extract URLs from the synthesis references array
+    synth_urls = set()
+    for ref in synth_references:
+        if ref:
+            url = ref.url if hasattr(ref, "url") else ref.get("url", "")
+            if url:
+                synth_urls.add(url.strip().lower())
+
+    # Step 4: Verify every extracted URL exists in the synth_references array
+    for url in markdown_urls:
+        if url not in synth_urls:
+            return f"URL {url} was cited in the text but not found in your references list."
+
+    # Step 5: Verify every URL in synth_references exists in the original source_reports
+    valid_source_urls: Set[str] = set()
     for rep in source_reports:
         if rep:
             refs = rep.references if hasattr(rep, "references") else rep.get("references", [])
             for ref in refs:
                 url = ref.url if hasattr(ref, "url") else ref.get("url", "")
-                valid_urls.add(url.strip().lower())
+                if url:
+                    valid_source_urls.add(url.strip().lower())
+
+    for url in synth_urls:
+        if url not in valid_source_urls:
+            return f"URL {url} is hallucinated or not present in the original reports' references. Only cite provided sources."
+
+    return None
+
+def check_blog_tier_ratio(references: List[Optional[Any]]) -> Optional[str]:
+    """
+    Checks if more than 50% of the given references are classified as 'blog_or_forum'.
+    Returns a flag string if true, or None otherwise.
+    """
+    total = 0
+    blog_count = 0
     
-    hallucinated = []
-    for url in cited_urls:
-        if url.strip().lower() not in valid_urls:
-            hallucinated.append(url)
-            
-    return hallucinated
+    for ref in references:
+        if ref:
+            total += 1
+            tier = ref.source_tier if hasattr(ref, "source_tier") else ref.get("source_tier", "")
+            if tier == "blog_or_forum":
+                blog_count += 1
+                
+    if total > 0 and (blog_count / total) > 0.5:
+        return f"⚠️ {blog_count} of {total} sources in this report are blog/forum tier."
+    return None

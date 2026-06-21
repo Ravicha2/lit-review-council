@@ -27,7 +27,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from src.schema import Reference, Report, JudgeRanking, SynthesisResult, PeerReviewResult
-from src.scoring import generate_anonymization_map, tally_ensemble_rankings, extract_hallucinated_urls
+from src.scoring import generate_anonymization_map, tally_ensemble_rankings, validate_synthesis_citations, check_blog_tier_ratio
 from src.prompts import EXPLORER_INSTRUCTION_TEMPLATE, REPORTER_INSTRUCTION_TEMPLATE, build_ensemble_instruction, build_synthesis_prompt
 
 # ---------------------------------------------------------------------------
@@ -48,9 +48,20 @@ search_github = create_adk_tool(
     description="Search GitHub for repositories matching the query and fetch their READMEs."
 )
 
-search_tavily = create_adk_tool(
-    TavilyProvider(),
-    name="search_tavily",
+search_tavily_researcher = create_adk_tool(
+    TavilyProvider(
+        include_domains=["acm.org", "ieee.org", "springer.com", "sciencedirect.com", "nature.com", "science.org", "wiley.com"],
+        exclude_domains=["arxiv.org"]
+    ),
+    name="search_tavily_researcher",
+    description="Search the web for academic papers and literature from publishers like ACM, IEEE, Springer, etc."
+)
+
+search_tavily_engineer = create_adk_tool(
+    TavilyProvider(
+        include_domains=["github.com", "docs.microsoft.com", "aws.amazon.com", "cloud.google.com", "medium.com", "dev.to"]
+    ),
+    name="search_tavily_engineer",
     description="Search the web for real-world implementation details, blogs, and documentation."
 )
 
@@ -98,7 +109,7 @@ academic_explorer = Agent(
         MIN_SOURCES=MIN_SOURCES,
         MAX_SOURCES=MAX_SOURCES
     ),
-    tools=[search_arxiv]
+    tools=[search_arxiv, search_tavily_researcher]
 )
 
 academic_reporter = Agent(
@@ -123,7 +134,7 @@ practitioner_explorer = Agent(
         MIN_SOURCES=MIN_SOURCES,
         MAX_SOURCES=MAX_SOURCES
     ),
-    tools=[search_github, search_tavily]
+    tools=[search_github, search_tavily_engineer]
 )
 
 practitioner_reporter = Agent(
@@ -226,15 +237,37 @@ async def run_pipeline(topic: str):
         pass
 
     session_obj = await session_service.get_session(app_name="app", user_id=user_id, session_id=session_id)
+    report_1 = session_obj.state.get("report_1")
+    report_2 = session_obj.state.get("report_2")
     print("=== RESEARCHER REPORT ===")
-    print(session_obj.state.get("report_1"))
+    print(report_1)
     print("=== ENGINEER REPORT ===")
-    print(session_obj.state.get("report_2"))
+    print(report_2)
+
+    async def save_track_report(report_obj, filename, title_prefix):
+        if not report_obj: return
+        title = report_obj.title if hasattr(report_obj, "title") else report_obj.get("title", "Untitled")
+        body = report_obj.body if hasattr(report_obj, "body") else report_obj.get("body", "")
+        refs = report_obj.references if hasattr(report_obj, "references") else report_obj.get("references", [])
+        
+        md = f"# {title_prefix}: {title}\n\n{body}\n"
+        if refs:
+            md += "\n## References\n"
+            for i, ref in enumerate(refs, 1):
+                r_title = ref.title if hasattr(ref, "title") else ref.get("title", "Untitled")
+                r_url = ref.url if hasattr(ref, "url") else ref.get("url", "")
+                md += f"{i}. [{r_title}]({r_url})\n"
+        
+        await write_to_filesystem_mcp(md, filename)
+
+    print("Saving track reports...")
+    await save_track_report(report_1, "litreview_research_report.md", "Researcher Report")
+    await save_track_report(report_2, "litreview_engineer_report.md", "Engineer Report")
 
     # Anonymize before reviews
     reports = {
-        "report_1": session_obj.state.get("report_1"),
-        "report_2": session_obj.state.get("report_2"),
+        "report_1": report_1,
+        "report_2": report_2,
     }
     anon_map = generate_anonymization_map(["report_1", "report_2"])
     
@@ -280,10 +313,6 @@ async def run_pipeline(topic: str):
     print("Running Stage 3: Synthesis & Persistence...")
     max_retries = 2
     for attempt in range(max_retries + 1):
-        if attempt > 0:
-            print(f"Synthesis validation failed. Retrying (attempt {attempt}/{max_retries})...")
-            session_obj.state.update({"validation_error": "Previous attempt included hallucinated URLs. Only use URLs present in the original reports."})
-            
         runner_synth = Runner(agent=synthesis, session_service=session_service, app_name="app")
         async for event in runner_synth.run_async(
             user_id=user_id, 
@@ -301,20 +330,35 @@ async def run_pipeline(topic: str):
             print("No synthesis result produced.")
             continue
             
-        urls_cited = result.urls_cited if hasattr(result, "urls_cited") else result.get("urls_cited", [])
+        synth_references = result.references if hasattr(result, "references") else result.get("references", [])
         markdown = result.markdown if hasattr(result, "markdown") else result.get("markdown", "")
         
         source_reports = [session_obj.state.get("report_1"), session_obj.state.get("report_2")]
-        hallucinated = extract_hallucinated_urls(urls_cited, source_reports)
+        validation_error = validate_synthesis_citations(markdown, synth_references, source_reports)
         
-        if not hallucinated:
+        if not validation_error:
             log_path = "litreview_log.md"
             print("Synthesis successful. Writing to log via MCP...")
+            
+            # Check source trust ratio
+            tier_flag = check_blog_tier_ratio(synth_references)
+            if tier_flag:
+                markdown += f"\n\n> **Source Warning:** {tier_flag}\n"
+
+            if synth_references:
+                markdown += "\n\n## References\n\n"
+                for i, ref in enumerate(synth_references, 1):
+                    title = ref.title if hasattr(ref, "title") else ref.get("title", "Untitled")
+                    url = ref.url if hasattr(ref, "url") else ref.get("url", "")
+                    markdown += f"{i}. [{title}]({url})\n"
             await write_to_filesystem_mcp(markdown, log_path)
             print("Done!")
             break
         elif attempt == max_retries:
-            raise ValueError(f"Failed to synthesize valid URLs after {max_retries} retries. Hallucinated: {hallucinated}")
+            raise ValueError(f"Failed to synthesize valid citations after {max_retries} retries. Error: {validation_error}")
+        else:
+            print(f"Synthesis validation failed: {validation_error}. Retrying (attempt {attempt+1}/{max_retries})...")
+            delta_state = {"validation_error": validation_error}
 
 if __name__ == "__main__":
     import sys
