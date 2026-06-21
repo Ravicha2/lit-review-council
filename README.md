@@ -1,23 +1,51 @@
 # Multi-Agent Literature Review Pipeline
 
-A multi-agent literature review pipeline built with the [Google ADK](https://github.com/google/google-adk) (Agent Development Kit). It coordinates specialized agents to research a topic from academic and practitioner perspectives, evaluates their work through a peer review ensemble, and synthesizes a well-grounded final report.
+A multi-agent literature review pipeline built with the [Google ADK](https://github.com/google/google-adk) (Agent Development Kit). It coordinates specialized agents to iteratively research sub-topics based on a YAML configuration. For each topic, it searches from academic and practitioner perspectives, evaluates the work through a peer review ensemble, and synthesizes a well-grounded report.
 
 Built as a capstone submission for the Kaggle "AI Agents: Intensive Vibe Coding Capstone".
 
 ## Motivation
 
+Literature reviews are suffocating: hundreds of papers, conflicting claims, and no obvious signal in the noise. Andrej Karpathy's [LLM Council](https://github.com/karpathy/llm-council) showed that multi-agent debate surfaces sharper answers than a single prompt. This project takes that insight into the research domain.
+
 LLMs researching complex topics suffer from two problems: lack of diverse grounding and self-preference bias (favoring their own outputs).
 
 This pipeline addresses both:
 
-1. **Source Isolation**: Two independent tracks, each with its own explorer (search) and reporter (write) agent. The academic track searches ArXiv, OpenAlex, and scholarly publishers (ACM, IEEE, Springer). The practitioner track searches GitHub and engineering docs/blogs.
-2. **Peer Review Ensemble**: Three reviewers (Researcher, Engineer, Architect) evaluate anonymized reports. Borda-count voting aggregates rankings so no single reviewer dominates.
-3. **Anti-Hallucination Guardrails**: The Synthesis agent's output is parsed and validated. Dangling citations like `(Author, Year)` or `[1]` are rejected. Every URL in the final report must exist in the original source references, or the run is retried (up to 2 times). A blog-tier ratio check warns when over 50% of sources are blog/forum tier.
+1. **Tiered Orchestration**: A Planner agent splits configured research topics into a multi-wave execution graph. Foundational concepts (Wave 1) run in parallel, and synthesis-dependent topics (Wave 2) run sequentially with distilled context from Wave 1.
+2. **Source Isolation**: Two independent tracks per topic, each with its own explorer (search) and reporter (write) agent. The academic track searches ArXiv, OpenAlex, and scholarly publishers. The practitioner track searches GitHub and engineering docs.
+3. **Peer Review Ensemble**: Three reviewers (Researcher, Engineer, Architect) evaluate anonymized reports. Borda-count voting aggregates rankings so no single reviewer dominates.
+4. **Anti-Hallucination Guardrails**: The Synthesis agent's output is parsed and validated. Dangling citations like `(Author, Year)` or `[1]` are rejected. Every URL in the final report must exist in the original source references, or the run is retried (up to 2 times). A blog-tier ratio check warns when over 50% of sources are blog/forum tier.
 
 ## Architecture
 
+![Pipeline Architecture](docs/pipeline-architecture.png)
+
+The pipeline is organized into **four stages**, with topics executed across **two waves** to balance parallelism and sequential dependency.
+
+### Why Two Waves?
+
+Not all research topics are independent. Some topics (e.g., foundational concepts like "truth maintenance systems") can be researched in parallel, while others (e.g., "multi-agent coordination using TMS") depend on the synthesized understanding of earlier topics.
+
+The **Planner agent** reads `topics.yaml` and partitions topics into:
+
+- **Wave 1** — parallel, independent topics. All topics in this wave run simultaneously through the full Stage 1→2→3 pipeline.
+- **Wave 2** — sequential, dependent topics. These topics require the distilled context from Wave 1 before they can be researched accurately.
+
+### Wave Handoff via the Distiller
+
+After Wave 1 completes, the **Distiller agent** consumes the Wave 1 topic files and produces a compact summary of the foundational findings. This distilled context is injected into every Wave 2 topic's prompt as additional background, ensuring Wave 2 explorers and reporters build on top of verified Wave 1 conclusions rather than starting from scratch.
+
+This prevents redundant searches and improves coherence across the final OKF bundle.
+
+### Stage Breakdown
+
 ```
-Stage 1 (Parallel Fan-out)
+Stage 0 (Orchestration)
+├── Planner agent organizes YAML topics into Wave 1 (parallel) and Wave 2 (sequential)
+└── Distiller agent summarizes completed Wave 1 topics to provide prior context to Wave 2
+
+Stage 1 (Parallel Fan-out per Topic)
 ├── Academic Track (SequentialAgent)
 │   ├── academic_explorer  → searches ArXiv, OpenAlex, Tavily (scholarly domains)
 │   └── academic_reporter  → writes Researcher report with structured references
@@ -25,18 +53,16 @@ Stage 1 (Parallel Fan-out)
     ├── practitioner_explorer → searches GitHub, Tavily (engineering domains)
     └── practitioner_reporter → writes Engineer report with structured references
 
-Stage 2 (Peer Review Ensemble)
+Stage 2 (Peer Review Ensemble per Topic)
 ├── researcher_reviewer  → ranks anonymized reports (Researcher perspective)
 ├── engineer_reviewer    → ranks anonymized reports (Engineer perspective)
 └── architect_reviewer   → ranks anonymized reports (Architect perspective)
     → Borda-count tally → winning report selected
 
-Stage 3 (Synthesis)
-└── synthesis agent → condensed final brief with YAML frontmatter
-    → citation validation loop (rejects hallucinated/dangling URLs, retries up to 2x)
-    → blog-tier ratio warning if >50% sources are blog_or_forum
-
-Persistence → MCP filesystem server writes final report to litreview_log.md
+Stage 3 (Synthesis & Persistence)
+├── synthesis agent → condensed final brief with YAML frontmatter
+│   → citation validation loop (rejects hallucinated/dangling URLs, retries up to 2x)
+└── Writes out to an interconnected Markdown OKF bundle (index.md and topic files)
 ```
 
 ## Search Providers
@@ -67,7 +93,6 @@ The synthesis step warns when more than half of cited sources are blog_or_forum 
 ### Prerequisites
 
 - [uv](https://github.com/astral-sh/uv) for Python dependency management
-- Node.js and `npx` (required for the MCP filesystem server)
 - An [OpenRouter](https://openrouter.ai/) API key (models route through OpenRouter)
 
 ### Installation
@@ -86,17 +111,24 @@ The synthesis step warns when more than half of cited sources are blog_or_forum 
    GITHUB_TOKEN=            # optional, raises rate limits
    TAVILY_API_KEY=          # optional, enables Tavily search
    OPENALEX_API_KEY=         # optional, raises rate limits
-   MAX_SOURCES=10
+   MAX_SOURCES=5            # number of sources per agent
    ```
 
 ## Usage
 
-```bash
-uv run python src/pipeline.py "graph topology for knowledge base constraint objects"
-```
+1. Define your research topics in a `topics.yaml` file:
+   ```yaml
+   topics:
+     - slug: "truth-maintenance-systems"
+       description: "Core logic and caching in truth maintenance systems."
+       search_keywords: ["JTMS", "ATMS", "truth maintenance"]
+   ```
+
+2. Run the orchestrator pipeline:
+   ```bash
+   uv run python main.py --config topic_key1.yaml --output okf_output --question "Overarching Research Question"
+   ```
 
 ### Output
 
-The pipeline runs all stages and prints progress to the console. On completion it appends the synthesized research brief to `litreview_log.md` via the MCP filesystem server.
-
-If the Synthesis agent hallucinates a URL or uses dangling citation syntax, the pipeline detects it and retries (up to 2 attempts before failing with an error).
+The pipeline runs all stages for each topic, executing them in waves where possible. On completion, it generates an interconnected Markdown bundle (OKF format) in the specified output directory, including an `index.md` linking to each specific topic file.

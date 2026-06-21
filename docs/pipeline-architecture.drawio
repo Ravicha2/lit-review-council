@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio" version="26.0.0">
+  <diagram name="Pipeline Architecture">
+    <mxGraphModel dx="1300" dy="1400" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Stage 0: Orchestration -->
+        <mxCell id="s0" value="Stage 0: Orchestration" style="swimlane;startSize=25;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;horizontal=1;collapsible=0;resizeParent=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="0" width="1120" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="yaml" value="topics.yaml" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="s0">
+          <mxGeometry x="30" y="50" width="110" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="planner" value="Planner Agent&#xa;(Wave 1 / Wave 2 split)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="s0">
+          <mxGeometry x="200" y="45" width="170" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="wave1" value="Wave 1&#xa;(parallel topics)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" vertex="1" parent="s0">
+          <mxGeometry x="460" y="45" width="150" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="wave2" value="Wave 2&#xa;(sequential topics)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" vertex="1" parent="s0">
+          <mxGeometry x="930" y="45" width="150" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- Wave 1: Stage 1 -->
+        <mxCell id="w1s1" value="Wave 1 — Stage 1: Parallel Fan-out" style="swimlane;startSize=25;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;horizontal=1;collapsible=0;resizeParent=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="160" width="1120" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="w1acad_exp" value="Academic Explorer&#xa;(ArXiv, OpenAlex, Tavily)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="w1s1">
+          <mxGeometry x="80" y="50" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="w1acad_rep" value="Academic Reporter&#xa;(Researcher report)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="w1s1">
+          <mxGeometry x="80" y="110" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="w1prac_exp" value="Practitioner Explorer&#xa;(GitHub, Tavily Eng)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="w1s1">
+          <mxGeometry x="700" y="50" width="190" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="w1prac_rep" value="Practitioner Reporter&#xa;(Engineer report)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="w1s1">
+          <mxGeometry x="700" y="110" width="190" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Wave 1: Stage 2 -->
+        <mxCell id="w1s2" value="Wave 1 — Stage 2: Peer Review Ensemble" style="swimlane;startSize=25;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;horizontal=1;collapsible=0;resizeParent=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="350" width="1120" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="w1rev_res" value="Researcher&#xa;Reviewer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="w1s2">
+          <mxGeometry x="60" y="50" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="w1rev_eng" value="Engineer&#xa;Reviewer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="w1s2">
+          <mxGeometry x="280" y="50" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="w1rev_arch" value="Architect&#xa;Reviewer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="w1s2">
+          <mxGeometry x="500" y="50" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="w1borda" value="Borda-Count&#xa;Tally" style="rhombus;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="w1s2">
+          <mxGeometry x="280" y="105" width="130" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- Wave 1: Stage 3 -->
+        <mxCell id="w1s3" value="Wave 1 — Stage 3: Synthesis" style="swimlane;startSize=25;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;horizontal=1;collapsible=0;resizeParent=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="540" width="1120" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="w1synth" value="Synthesis Agent&#xa;(citation validation)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="w1s3">
+          <mxGeometry x="200" y="40" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="w1okf" value="Wave 1 Results&#xa;(topic files)" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="w1s3">
+          <mxGeometry x="620" y="35" width="170" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- Distiller Handoff -->
+        <mxCell id="handoff" value="Distiller Handoff" style="swimlane;startSize=25;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;horizontal=1;collapsible=0;resizeParent=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="670" width="1120" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="distiller" value="Distiller Agent&#xa;(summarizes Wave 1 for Wave 2 context)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="handoff">
+          <mxGeometry x="380" y="35" width="260" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- Wave 2: Stage 1 -->
+        <mxCell id="w2s1" value="Wave 2 — Stage 1: Parallel Fan-out (+ prior context)" style="swimlane;startSize=25;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;horizontal=1;collapsible=0;resizeParent=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="790" width="1120" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="w2acad_exp" value="Academic Explorer&#xa;(+ Wave 1 context)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="w2s1">
+          <mxGeometry x="80" y="50" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="w2acad_rep" value="Academic Reporter&#xa;(Researcher report)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="w2s1">
+          <mxGeometry x="80" y="110" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="w2prac_exp" value="Practitioner Explorer&#xa;(+ Wave 1 context)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="w2s1">
+          <mxGeometry x="700" y="50" width="190" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="w2prac_rep" value="Practitioner Reporter&#xa;(Engineer report)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="w2s1">
+          <mxGeometry x="700" y="110" width="190" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Wave 2: Stage 2 -->
+        <mxCell id="w2s2" value="Wave 2 — Stage 2: Peer Review Ensemble" style="swimlane;startSize=25;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;horizontal=1;collapsible=0;resizeParent=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="980" width="1120" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="w2rev_res" value="Researcher&#xa;Reviewer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="w2s2">
+          <mxGeometry x="60" y="50" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="w2rev_eng" value="Engineer&#xa;Reviewer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="w2s2">
+          <mxGeometry x="280" y="50" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="w2rev_arch" value="Architect&#xa;Reviewer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="w2s2">
+          <mxGeometry x="500" y="50" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="w2borda" value="Borda-Count&#xa;Tally" style="rhombus;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="w2s2">
+          <mxGeometry x="280" y="105" width="130" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- Wave 2: Stage 3 -->
+        <mxCell id="w2s3" value="Wave 2 — Stage 3: Synthesis &amp; Persistence" style="swimlane;startSize=25;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;horizontal=1;collapsible=0;resizeParent=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1170" width="1120" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="w2synth" value="Synthesis Agent&#xa;(citation validation)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="w2s3">
+          <mxGeometry x="200" y="40" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="okf" value="OKF Bundle&#xa;(index.md + all topic files)" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="w2s3">
+          <mxGeometry x="620" y="35" width="190" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- Edges: Orchestration -->
+        <mxCell id="e_yaml_planner" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="yaml" target="planner">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_planner_w1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="planner" target="wave1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_planner_w2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="planner" target="wave2">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="500" y="72" />
+              <mxPoint x="500" y="25" />
+              <mxPoint x="930" y="25" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Wave 1 edges -->
+        <mxCell id="e_w1_entry" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="wave1" target="w1acad_exp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_w1_acad" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w1acad_exp" target="w1acad_rep">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_w1_prac" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w1prac_exp" target="w1prac_rep">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_w1_rep_rev1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w1acad_rep" target="w1rev_res">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_w1_rep_rev2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w1acad_rep" target="w1rev_eng">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="170" y="340" />
+              <mxPoint x="345" y="340" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_w1_rep_rev3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w1acad_rep" target="w1rev_arch">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="170" y="340" />
+              <mxPoint x="565" y="340" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_w1_prep_rev1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w1prac_rep" target="w1rev_arch">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_w1_prep_rev2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w1prac_rep" target="w1rev_eng">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="795" y="340" />
+              <mxPoint x="345" y="340" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_w1_prep_rev3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w1prac_rep" target="w1rev_res">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="795" y="340" />
+              <mxPoint x="125" y="340" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_w1_borda" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w1rev_res" target="w1borda">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_w1_borda2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w1rev_eng" target="w1borda">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_w1_borda3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w1rev_arch" target="w1borda">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_w1_synth" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w1borda" target="w1synth">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_w1_okf" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="w1synth" target="w1okf">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Distiller handoff -->
+        <mxCell id="e_w1_dist" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w1okf" target="distiller">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_dist_w2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="distiller" target="w2acad_exp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Wave 2 edges -->
+        <mxCell id="e_w2_acad" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w2acad_exp" target="w2acad_rep">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_w2_prac" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w2prac_exp" target="w2prac_rep">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_w2_rep_rev1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w2acad_rep" target="w2rev_res">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_w2_rep_rev2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w2acad_rep" target="w2rev_eng">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="170" y="970" />
+              <mxPoint x="345" y="970" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_w2_rep_rev3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w2acad_rep" target="w2rev_arch">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="170" y="970" />
+              <mxPoint x="565" y="970" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_w2_prep_rev1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w2prac_rep" target="w2rev_arch">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_w2_prep_rev2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w2prac_rep" target="w2rev_eng">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="795" y="970" />
+              <mxPoint x="345" y="970" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_w2_prep_rev3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w2prac_rep" target="w2rev_res">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="795" y="970" />
+              <mxPoint x="125" y="970" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_w2_borda1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w2rev_res" target="w2borda">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_w2_borda2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w2rev_eng" target="w2borda">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_w2_borda3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w2rev_arch" target="w2borda">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_w2_synth" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="w2borda" target="w2synth">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_w2_okf" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="w2synth" target="okf">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
