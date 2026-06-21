@@ -1,4 +1,6 @@
 import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import json
 import yaml
 import asyncio
@@ -263,7 +265,7 @@ async def orchestrate(config_path: str, output_dir: str, research_question: str)
     
     async def run_and_distill(slug: str):
         try:
-            markdown = await run_pipeline(slug, prior_context=None)
+            markdown = await run_pipeline(slug, session_id=slug, output_dir=output_dir, prior_context=None)
             if markdown is None:
                 raise ValueError(f"Pipeline returned None for topic {slug}")
             distillation = await run_distiller(slug, markdown)
@@ -288,7 +290,7 @@ async def orchestrate(config_path: str, output_dir: str, research_question: str)
     async def run_wave2(slug: str, deps: List[str]):
         prior_context = build_prior_context_string(deps, distillations)
         try:
-            markdown = await run_pipeline(slug, prior_context=prior_context)
+            markdown = await run_pipeline(slug, session_id=slug, output_dir=output_dir, prior_context=prior_context)
             if markdown:
                 return slug, markdown
         except Exception as e:

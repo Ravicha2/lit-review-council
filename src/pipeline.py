@@ -20,11 +20,10 @@ eng_model = LiteLlm(model=os.getenv("ENG_MODEL") or "openrouter/deepseek/deepsee
 research_model = LiteLlm(model=os.getenv("RESEARCH_MODEL") or "openrouter/deepseek/deepseek-v4-flash")
 judge_model = LiteLlm(model=os.getenv("JUDGE_MODEL") or "openrouter/deepseek/deepseek-v4-flash")
 
-MAX_SOURCES = int(os.getenv("MAX_SOURCES", "10"))
-MIN_SOURCES = min(MAX_SOURCES, 5)
+MAX_SOURCES = int(os.getenv("MAX_SOURCES", "5"))
+MIN_SOURCES = min(MAX_SOURCES, 3)
 
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+
 
 from src.schema import Reference, Report, JudgeRanking, SynthesisResult, PeerReviewResult
 from src.scoring import generate_anonymization_map, tally_ensemble_rankings, validate_synthesis_citations, check_blog_tier_ratio
@@ -71,32 +70,7 @@ search_tavily_engineer = create_adk_tool(
     description="Search the web for real-world implementation details, blogs, and documentation."
 )
 
-async def write_to_filesystem_mcp(content: str, path: str):
-    """Use MCP filesystem server to write the final markdown log."""
-    abs_path = os.path.abspath(path)
-    allowed_dir = os.path.dirname(abs_path)
-    
-    server_params = StdioServerParameters(
-        command="npx",
-        args=["-y", "@modelcontextprotocol/server-filesystem", allowed_dir]
-    )
-    
-    async with stdio_client(server_params) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            try:
-                result = await session.call_tool("read_file", {"path": abs_path})
-                if getattr(result, "isError", False):
-                    existing = ""
-                else:
-                    existing = result.content[0].text if result.content else ""
-                    if "ENOENT" in existing and "no such file" in existing:
-                        existing = ""
-            except Exception:
-                existing = ""
-            
-            new_content = existing + "\n\n" + content if existing else content
-            await session.call_tool("write_file", {"path": abs_path, "content": new_content})
+
 
 # ---------------------------------------------------------------------------
 # Callbacks
@@ -261,9 +235,8 @@ synthesis = Agent(
 # Pipeline Runner
 # ---------------------------------------------------------------------------
 
-async def run_pipeline(topic: str, prior_context: str | None = None) -> str | None:
+async def run_pipeline(topic: str, session_id: str, output_dir: str, prior_context: str | None = None) -> str | None:
     session_service = InMemorySessionService()
-    session_id = "sess1"
     user_id = "user1"
     
     await session_service.create_session(app_name="app", user_id=user_id, session_id=session_id)
@@ -311,11 +284,15 @@ async def run_pipeline(topic: str, prior_context: str | None = None) -> str | No
                 r_url = ref.url if hasattr(ref, "url") else ref.get("url", "")
                 md += f"{i}. [{r_title}]({r_url})\n"
         
-        await write_to_filesystem_mcp(md, filename)
+        # Write using standard python file I/O
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        with open(filename, "w") as f:
+            f.write(md)
 
     print("Saving track reports...")
-    await save_track_report(report_1, "litreview_research_report.md", "Researcher Report")
-    await save_track_report(report_2, "litreview_engineer_report.md", "Engineer Report")
+    intermediate_dir = os.path.join(output_dir, "intermediate")
+    await save_track_report(report_1, os.path.join(intermediate_dir, f"{session_id}_research_report.md"), "Researcher Report")
+    await save_track_report(report_2, os.path.join(intermediate_dir, f"{session_id}_engineer_report.md"), "Engineer Report")
 
     # Anonymize before reviews
     reports = {
@@ -413,4 +390,4 @@ async def run_pipeline(topic: str, prior_context: str | None = None) -> str | No
 if __name__ == "__main__":
     import sys
     topic = sys.argv[1] if len(sys.argv) > 1 else "graph topology for knowledge base constraint objects"
-    asyncio.run(run_pipeline(topic))
+    asyncio.run(run_pipeline(topic, session_id="test_session", output_dir="okf_output"))
