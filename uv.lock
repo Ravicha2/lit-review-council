@@ -1591,7 +1591,7 @@ wheels = [
 [[package]]
 name = "lit-review-council"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "ddgs" },
     { name = "google-adk", extra = ["extensions"] },

@@ -88,58 +88,45 @@ Every reference is classified into one of four tiers:
 
 The synthesis step warns when more than half of cited sources are blog_or_forum tier.
 
-## Setup
+## Setup & Installation
 
-### Prerequisites
+### 1. Using the MCP Server (Recommended for Claude Desktop / AI Agents)
 
-- [uv](https://github.com/astral-sh/uv) for Python dependency management
-- An [OpenRouter](https://openrouter.ai/) API key (models route through OpenRouter)
+You do not need to clone this repository to use the MCP server. You can run it instantly using `uvx`!
 
-### Installation
+Add the following to your Claude Desktop configuration (or any MCP client):
+
+```json
+{
+  "mcpServers": {
+    "lit-review-council": {
+      "command": "uvx",
+      "args": ["lit-review-council"],
+      "env": {
+        "OPENROUTER_API_KEY": "sk-or-your-api-key",
+        "GITHUB_TOKEN": "ghp_your-github-token",
+        "TAVILY_API_KEY": "tvly-your-tavily-key",
+        "OPENALEX_API_KEY": "your-openalex-key",
+        "ENG_MODEL": "openrouter/deepseek/deepseek-v4-flash",
+        "RESEARCH_MODEL": "openrouter/deepseek/deepseek-v4-flash"
+      }
+    }
+  }
+}
+```
+
+Once connected, your AI agent can natively fetch the `lit_review_council_instructions` prompt to understand how to guide you through a literature review!
+
+### 2. Local Developer Setup (Manual / CLI Usage)
+
+If you want to run the pipeline manually via the terminal or develop the repository:
 
 1. Clone the repository.
 2. Copy `.env.example` to `.env` and fill in your keys:
    ```bash
    cp .env.example .env
    ```
-3. Edit `.env`:
-   ```env
-   OPENROUTER_API_KEY=your_key
-   ENG_MODEL=openrouter/qwen/qwen3.5-flash-02-23
-   RESEARCH_MODEL=openrouter/google/gemma-4-26b-a4b-it
-   JUDGE_MODEL=openrouter/deepseek/deepseek-v4-flash
-   GITHUB_TOKEN=            # optional, raises rate limits
-   TAVILY_API_KEY=          # optional, enables Tavily search
-   OPENALEX_API_KEY=         # optional, raises rate limits
-   MAX_SOURCES=5            # number of sources per agent
-   ```
-
-## Usage
-
-The pipeline can be executed either programmatically as an MCP tool by an AI agent, or manually via the CLI.
-
-### 1. Using the MCP Server (For Agents)
-
-If you are an agent connected to this workspace, you can use the built-in MCP server to conduct a literature review without writing any configuration files.
-
-1. Start the MCP server:
-   ```bash
-   uv run python src/mcp_server.py
-   ```
-2. The server exposes the `conduct_literature_review` tool. Formulate the topics and pass them as a JSON array along with the overarching research question directly to the tool. 
-3. See the agent skill documentation at [skills/lit-review-council/SKILL.md](skills/lit-review-council/SKILL.md) for full instructions on framing the research question and executing the pipeline.
-
-### 2. Using the CLI (Manual)
-
-1. Define your research topics in a `topics.yaml` file:
-   ```yaml
-   topics:
-     - slug: "truth-maintenance-systems"
-       description: "Core logic and caching in truth maintenance systems."
-       search_keywords: ["JTMS", "ATMS", "truth maintenance"]
-   ```
-
-2. Run the orchestrator pipeline:
+3. Run the orchestrator pipeline with a configuration file:
    ```bash
    uv run python main.py --config topics.yaml --output okf_output --question "Overarching Research Question"
    ```

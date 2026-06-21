@@ -2,10 +2,19 @@ import os
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
 from typing import List, Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from src.orchestration import orchestrate, Config, TopicConfig
+from src.skill_prompt import SKILL_MARKDOWN
 
 mcp = FastMCP("lit-review-council")
+
+@mcp.prompt()
+def lit_review_council_instructions() -> str:
+    """Get the instructions and guidelines for using the lit-review-council orchestrator."""
+    return SKILL_MARKDOWN
 
 @mcp.tool()
 async def conduct_literature_review(question: str, topics: list[dict], output_dir: str = ".") -> str:
@@ -48,5 +57,8 @@ async def conduct_literature_review(question: str, topics: list[dict], output_di
     index_path = os.path.join(output_dir, "index.md")
     return f"Literature review completed successfully. The OKF bundle has been saved to {output_dir}. Start reading at {index_path}."
 
-if __name__ == "__main__":
+def main():
     mcp.run()
+
+if __name__ == "__main__":
+    main()
