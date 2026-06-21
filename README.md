@@ -17,6 +17,49 @@ This pipeline addresses both:
 3. **Peer Review Ensemble**: Three reviewers (Researcher, Engineer, Architect) evaluate anonymized reports. Borda-count voting aggregates rankings so no single reviewer dominates.
 4. **Anti-Hallucination Guardrails**: The Synthesis agent's output is parsed and validated. Dangling citations like `(Author, Year)` or `[1]` are rejected. Every URL in the final report must exist in the original source references, or the run is retried (up to 2 times). A blog-tier ratio check warns when over 50% of sources are blog/forum tier.
 
+## Setup & Installation
+
+### 1. Using the MCP Server (Recommended for Claude Desktop / AI Agents)
+
+You do not need to clone this repository to use the MCP server. You can run it instantly using `uvx`!
+
+Add the following to your Claude Desktop configuration (or any MCP client):
+
+```json
+{
+  "mcpServers": {
+    "lit-review-council": {
+      "command": "uvx",
+      "args": ["lit-review-council"],
+      "env": {
+        "OPENROUTER_API_KEY": "sk-or-your-api-key",
+        "GITHUB_TOKEN": "ghp_your-github-token",
+        "TAVILY_API_KEY": "tvly-your-tavily-key",
+        "OPENALEX_API_KEY": "your-openalex-key",
+        "ENG_MODEL": "openrouter/deepseek/deepseek-v4-flash",
+        "RESEARCH_MODEL": "openrouter/deepseek/deepseek-v4-flash"
+      }
+    }
+  }
+}
+```
+
+Once connected, your AI agent can natively fetch the `lit_review_council_instructions` prompt to understand how to guide you through a literature review!
+
+### 2. Local Developer Setup (Manual / CLI Usage)
+
+If you want to run the pipeline manually via the terminal or develop the repository:
+
+1. Clone the repository.
+2. Copy `.env.example` to `.env` and fill in your keys:
+   ```bash
+   cp .env.example .env
+   ```
+3. Run the orchestrator pipeline with a configuration file:
+   ```bash
+   uv run python main.py --config topics.yaml --output okf_output --question "Overarching Research Question"
+   ```
+
 ## Architecture
 
 ![Pipeline Architecture](docs/pipeline-architecture.png)
@@ -87,49 +130,6 @@ Every reference is classified into one of four tiers:
 - **blog_or_forum**: Medium, personal blogs, Stack Overflow, Reddit
 
 The synthesis step warns when more than half of cited sources are blog_or_forum tier.
-
-## Setup & Installation
-
-### 1. Using the MCP Server (Recommended for Claude Desktop / AI Agents)
-
-You do not need to clone this repository to use the MCP server. You can run it instantly using `uvx`!
-
-Add the following to your Claude Desktop configuration (or any MCP client):
-
-```json
-{
-  "mcpServers": {
-    "lit-review-council": {
-      "command": "uvx",
-      "args": ["lit-review-council"],
-      "env": {
-        "OPENROUTER_API_KEY": "sk-or-your-api-key",
-        "GITHUB_TOKEN": "ghp_your-github-token",
-        "TAVILY_API_KEY": "tvly-your-tavily-key",
-        "OPENALEX_API_KEY": "your-openalex-key",
-        "ENG_MODEL": "openrouter/deepseek/deepseek-v4-flash",
-        "RESEARCH_MODEL": "openrouter/deepseek/deepseek-v4-flash"
-      }
-    }
-  }
-}
-```
-
-Once connected, your AI agent can natively fetch the `lit_review_council_instructions` prompt to understand how to guide you through a literature review!
-
-### 2. Local Developer Setup (Manual / CLI Usage)
-
-If you want to run the pipeline manually via the terminal or develop the repository:
-
-1. Clone the repository.
-2. Copy `.env.example` to `.env` and fill in your keys:
-   ```bash
-   cp .env.example .env
-   ```
-3. Run the orchestrator pipeline with a configuration file:
-   ```bash
-   uv run python main.py --config topics.yaml --output okf_output --question "Overarching Research Question"
-   ```
 
 ### Output
 
