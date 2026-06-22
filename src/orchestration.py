@@ -1,5 +1,6 @@
 import os
 import sys
+import logging
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import json
 import yaml
@@ -11,6 +12,8 @@ from typing import List, Dict, Optional, Any
 from src.schema import Reference
 from src.pipeline import run_pipeline, eng_model, research_model
 from google.genai.types import Content, Part
+
+logger = logging.getLogger("lit-review-council.orchestration")
 
 # ---------------------------------------------------------------------------
 # Schemas
@@ -249,18 +252,18 @@ Ensure top_urls contains a maximum of 5 references. Do not include markdown back
         )
         text = response.choices[0].message.content
     except Exception as e:
-        print(f"Error in distiller: {e}")
+        logger.error("Error in distiller: %s", e)
         text = '{"key_terms": [], "conclusion": "", "top_urls": []}'
         
     return parse_distiller_output(text)
 
 async def orchestrate(config: Config, output_dir: str, research_question: str):
     
-    print("Running planner...")
+    logger.info("Running planner...")
     plan = await run_planner(config.topics)
     exec_plan = build_execution_plan(plan)
     
-    print(f"Wave 1 topics: {exec_plan.wave1_topics}")
+    logger.info("Wave 1 topics: %s", exec_plan.wave1_topics)
     
     async def run_and_distill(slug: str):
         try:
@@ -270,7 +273,7 @@ async def orchestrate(config: Config, output_dir: str, research_question: str):
             distillation = await run_distiller(slug, markdown)
             return slug, markdown, distillation
         except Exception as e:
-            print(f"Topic {slug} failed: {e}")
+            logger.error("Topic %s failed: %s", slug, e)
             return slug, None, handle_wave1_failure(slug, e)
             
     wave1_tasks = [run_and_distill(slug) for slug in exec_plan.wave1_topics]
@@ -284,7 +287,7 @@ async def orchestrate(config: Config, output_dir: str, research_question: str):
             results_markdown[slug] = markdown
         distillations[slug] = dist
         
-    print(f"Wave 2 topics: {list(exec_plan.wave2_contexts.keys())}")
+    logger.info("Wave 2 topics: %s", list(exec_plan.wave2_contexts.keys()))
     
     async def run_wave2(slug: str, deps: List[str]):
         prior_context = build_prior_context_string(deps, distillations)
@@ -293,7 +296,7 @@ async def orchestrate(config: Config, output_dir: str, research_question: str):
             if markdown:
                 return slug, markdown
         except Exception as e:
-            print(f"Topic {slug} failed: {e}")
+            logger.error("Topic %s failed: %s", slug, e)
         return slug, None
 
     wave2_tasks = [run_wave2(slug, deps) for slug, deps in exec_plan.wave2_contexts.items()]
@@ -303,6 +306,6 @@ async def orchestrate(config: Config, output_dir: str, research_question: str):
         if markdown:
             results_markdown[slug] = markdown
             
-    print(f"Writing OKF bundle to {output_dir}...")
+    logger.info("Writing OKF bundle to %s...", output_dir)
     write_okf_bundle(results_markdown, output_dir, research_question, dependencies=plan.wave2)
-    print("Orchestration complete.")
+    logger.info("Orchestration complete.")

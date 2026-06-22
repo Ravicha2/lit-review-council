@@ -1,4 +1,5 @@
 import os
+import logging
 import requests
 import urllib.parse
 import xml.etree.ElementTree as ET
@@ -16,6 +17,8 @@ def is_retryable_http_error(exception):
     return isinstance(exception, (requests.exceptions.ConnectionError, requests.exceptions.Timeout))
 
 from .schema import SearchResult
+
+logger = logging.getLogger("lit-review-council.providers")
 
 class BaseProvider(ABC):
     @abstractmethod
@@ -109,7 +112,7 @@ class TavilyProvider(BaseProvider):
     def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
         api_key = os.getenv("TAVILY_API_KEY")
         if not api_key:
-            print("[!] TAVILY_API_KEY not set. Cannot search Tavily.")
+            logger.warning("TAVILY_API_KEY not set. Cannot search Tavily.")
             return []
             
         url = "https://api.tavily.com/search"
@@ -204,14 +207,14 @@ def create_adk_tool(provider: BaseProvider, name: str, description: str) -> Call
     Safely catches exceptions so the agent doesn't crash on network errors.
     """
     def _search_tool(query: str) -> list[dict]:
-        print(f"[*] {name} searching for: '{query}'", flush=True)
+        logger.info("[%s] searching for: '%s'", name, query)
         try:
             results = provider.search(query)
-            print(f"[*] {name} found {len(results)} results", flush=True)
+            logger.info("[%s] found %d results", name, len(results))
             return [r.model_dump() for r in results]
         except Exception as e:
             # Return a graceful error so the LLM knows the tool failed but can continue
-            print(f"[!] {name} error: {str(e)}", flush=True)
+            logger.error("[%s] error: %s", name, e)
             return [{"error": f"{name} API error: {str(e)}"}]
             
     _search_tool.__name__ = name

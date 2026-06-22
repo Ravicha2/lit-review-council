@@ -1,5 +1,6 @@
 import os
 import sys
+import logging
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import json
 import random
@@ -22,6 +23,8 @@ judge_model = LiteLlm(model=os.getenv("JUDGE_MODEL") or "openrouter/deepseek/dee
 
 MAX_SOURCES = int(os.getenv("MAX_SOURCES", "5"))
 MIN_SOURCES = min(MAX_SOURCES, 3)
+
+logger = logging.getLogger("lit-review-council.pipeline")
 
 
 
@@ -241,11 +244,11 @@ async def run_pipeline(topic: str, session_id: str, output_dir: str, prior_conte
     
     await session_service.create_session(app_name="app", user_id=user_id, session_id=session_id)
     
-    print(f"Starting pipeline for topic: {topic}")
+    logger.info("Starting pipeline for topic: %s", topic)
     
     # 1. Fanout
     runner = Runner(agent=fanout, session_service=session_service, app_name="app")
-    print("Running Stage 1: Research Fan-out...")
+    logger.info("Running Stage 1: Research Fan-out...")
     
     init_state = {
         "topic": topic,
@@ -265,10 +268,8 @@ async def run_pipeline(topic: str, session_id: str, output_dir: str, prior_conte
     session_obj = await session_service.get_session(app_name="app", user_id=user_id, session_id=session_id)
     report_1 = session_obj.state.get("report_1")
     report_2 = session_obj.state.get("report_2")
-    print("=== RESEARCHER REPORT ===")
-    print(report_1)
-    print("=== ENGINEER REPORT ===")
-    print(report_2)
+    logger.debug("=== RESEARCHER REPORT ===\n%s", report_1)
+    logger.debug("=== ENGINEER REPORT ===\n%s", report_2)
 
     async def save_track_report(report_obj, filename, title_prefix):
         if not report_obj: return
@@ -289,7 +290,7 @@ async def run_pipeline(topic: str, session_id: str, output_dir: str, prior_conte
         with open(filename, "w") as f:
             f.write(md)
 
-    print("Saving track reports...")
+    logger.info("Saving track reports...")
     intermediate_dir = os.path.join(output_dir, "intermediate")
     await save_track_report(report_1, os.path.join(intermediate_dir, f"{session_id}_research_report.md"), "Researcher Report")
     await save_track_report(report_2, os.path.join(intermediate_dir, f"{session_id}_engineer_report.md"), "Engineer Report")
@@ -313,7 +314,7 @@ async def run_pipeline(topic: str, session_id: str, output_dir: str, prior_conte
     
     # 2. Peer Review Ensemble
     runner_review = Runner(agent=review_fanout, session_service=session_service, app_name="app")
-    print("Running Stage 2: Peer Review Ensemble...")
+    logger.info("Running Stage 2: Peer Review Ensemble...")
     
     async for event in runner_review.run_async(
         user_id=user_id,
@@ -337,10 +338,10 @@ async def run_pipeline(topic: str, session_id: str, output_dir: str, prior_conte
         "peer_review_rationale": " | ".join(reasons)
     }
     
-    print(f"Winning report ID from Ensemble: {winning_report_id} (Winner: {top_label})")
+    logger.info("Winning report ID from Ensemble: %s (Winner: %s)", winning_report_id, top_label)
     
     # 4. Synthesis with retry loop
-    print("Running Stage 3: Synthesis & Persistence...")
+    logger.info("Running Stage 3: Synthesis & Persistence...")
     max_retries = 2
     for attempt in range(max_retries + 1):
         runner_synth = Runner(agent=synthesis, session_service=session_service, app_name="app")
@@ -353,7 +354,7 @@ async def run_pipeline(topic: str, session_id: str, output_dir: str, prior_conte
             ):
                 pass
         except Exception as e:
-            print(f"ADK Runner exception during synthesis: {e}")
+            logger.error("ADK Runner exception during synthesis: %s", e)
             if attempt < max_retries:
                 delta_state = {"validation_error": f"JSON Schema validation failed: {str(e)}. Make sure to output exactly the requested schema."}
                 continue
@@ -365,7 +366,7 @@ async def run_pipeline(topic: str, session_id: str, output_dir: str, prior_conte
         
         delta_state = {}
         if not result:
-            print("No synthesis result produced.")
+            logger.warning("No synthesis result produced.")
             continue
             
         synth_references = result.references if hasattr(result, "references") else result.get("references", [])
@@ -375,7 +376,7 @@ async def run_pipeline(topic: str, session_id: str, output_dir: str, prior_conte
         validation_error = validate_synthesis_citations(markdown, synth_references, source_reports)
         
         if not validation_error:
-            print("Synthesis successful. Returning markdown.")
+            logger.info("Synthesis successful. Returning markdown.")
             
             # Check source trust ratio
             tier_flag = check_blog_tier_ratio(synth_references)
@@ -392,7 +393,7 @@ async def run_pipeline(topic: str, session_id: str, output_dir: str, prior_conte
         elif attempt == max_retries:
             raise ValueError(f"Failed to synthesize valid citations after {max_retries} retries. Error: {validation_error}")
         else:
-            print(f"Synthesis validation failed: {validation_error}. Retrying (attempt {attempt+1}/{max_retries})...")
+            logger.warning("Synthesis validation failed: %s. Retrying (attempt %d/%d)...", validation_error, attempt+1, max_retries)
             delta_state = {"validation_error": validation_error}
 
 if __name__ == "__main__":
