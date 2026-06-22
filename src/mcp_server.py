@@ -30,6 +30,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger("lit-review-council")
 
+# Validate required env vars on startup.
+_REQUIRED_ENV = ["OPENROUTER_API_KEY", "GITHUB_TOKEN", "TAVILY_API_KEY"]
+_OPTIONAL_ENV = ["ENG_MODEL", "RESEARCH_MODEL", "JUDGE_MODEL", "OPENALEX_API_KEY", "MAX_SOURCES"]
+_missing = [v for v in _REQUIRED_ENV if not os.getenv(v)]
+if _missing:
+    logger.error("Missing required env vars: %s. Set them in your MCP client config.", ", ".join(_missing))
+for _var in _OPTIONAL_ENV:
+    _val = os.getenv(_var)
+    logger.info("Env var %s = %s", _var, _val if _val else "(default)")
+logger.info("OPENROUTER_API_KEY is %s", "set" if os.getenv("OPENROUTER_API_KEY") else "MISSING")
+
 # Force-suppress LiteLLM's verbose logging after transitive import.
 from src.orchestration import orchestrate, Config, TopicConfig
 from src.skill_prompt import SKILL_MARKDOWN
