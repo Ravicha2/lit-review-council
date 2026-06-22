@@ -21,9 +21,15 @@ This pipeline addresses both:
 
 ### 1. Using the MCP Server (Recommended for Claude Desktop / AI Agents)
 
-You do not need to clone this repository to use the MCP server. You can run it instantly using `uvx`!
+The server is published to PyPI as `lit-review-council`. You do not need to clone this repository to use it! `uvx` will automatically download and run it in an isolated environment.
 
-Add the following to your Claude Desktop configuration (or any MCP client):
+**For Claude Desktop:**
+
+1. Ensure you have [`uv`](https://docs.astral.sh/uv/) installed on your machine.
+2. Open your Claude Desktop configuration file:
+   - **Mac**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+3. Add the server to the `mcpServers` object and provide your API keys in the `env` block:
 
 ```json
 {
@@ -36,15 +42,19 @@ Add the following to your Claude Desktop configuration (or any MCP client):
         "GITHUB_TOKEN": "ghp_your-github-token",
         "TAVILY_API_KEY": "tvly-your-tavily-key",
         "OPENALEX_API_KEY": "your-openalex-key",
-        "ENG_MODEL": "openrouter/deepseek/deepseek-v4-flash",
-        "RESEARCH_MODEL": "openrouter/deepseek/deepseek-v4-flash"
+        "ENG_MODEL": "openrouter/openai/gpt-5.5",
+        "RESEARCH_MODEL": "openrouter/google/gemini-3.5-flash",
+        "JUDGE_MODEL": "openrouter/anthropic/claude-sonnet-4.6"
       }
     }
   }
 }
 ```
 
-Once connected, your AI agent can natively fetch the `lit_review_council_instructions` prompt to understand how to guide you through a literature review!
+4. **Restart Claude Desktop**.
+5. In a new chat, simply ask Claude to: *"Conduct a literature review on [Topic]"*.
+
+Once connected, your AI agent can natively fetch the `lit_review_council_instructions` prompt to understand exactly how to guide you through a structured literature review!
 
 ### 2. Local Developer Setup (Manual / CLI Usage)
 

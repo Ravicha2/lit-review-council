@@ -27,10 +27,6 @@ If a Wave 1 topic fails, its distillation is set to empty string. Wave 2 topics 
 - **Stage 2 (Peer Review Ensemble)**: Three reviewers evaluate anonymized reports. Borda-count voting aggregates rankings.
 - **Stage 3 (Synthesis & Persistence)**: A final agent writes the briefed markdown. **URL Validation** ensures every cited URL exists in upstream reports.
 
-## Infrastructure
-
-- **Kaggle MCP Requirement**: Satisfied using the official `@modelcontextprotocol/server-filesystem` executed via `npx` for the file-write tool.
-
 ## Architecture Patterns
 
 - **Validator Loop Directive**: When the `Validator` node routes back to the `Gatherer`, it returns a string directive prompting different search keywords.

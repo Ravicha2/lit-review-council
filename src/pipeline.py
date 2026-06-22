@@ -16,9 +16,9 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.models.lite_llm import LiteLlm
 
-eng_model = LiteLlm(model=os.getenv("ENG_MODEL") or "openrouter/deepseek/deepseek-v4-flash")
-research_model = LiteLlm(model=os.getenv("RESEARCH_MODEL") or "openrouter/deepseek/deepseek-v4-flash")
-judge_model = LiteLlm(model=os.getenv("JUDGE_MODEL") or "openrouter/deepseek/deepseek-v4-flash")
+eng_model = LiteLlm(model=os.getenv("ENG_MODEL") or "openrouter/moonshotai/kimi-k2.6")
+research_model = LiteLlm(model=os.getenv("RESEARCH_MODEL") or "openrouter/z-ai/glm-5.1")
+judge_model = LiteLlm(model=os.getenv("JUDGE_MODEL") or "openrouter/deepseek/deepseek-v4-pro")
 
 MAX_SOURCES = int(os.getenv("MAX_SOURCES", "5"))
 MIN_SOURCES = min(MAX_SOURCES, 3)
