@@ -1,0 +1,70 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Ravicha2/lit-review-council",
+  "title": "Literature Review Council",
+  "description": "Multi-agent literature review: research, peer review, and synthesize grounded reports.",
+  "version": "0.1.4",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "lit-review-council",
+      "version": "0.1.4",
+      "runtimeHint": "uvx",
+      "runtimeArguments": [
+        {
+          "type": "positional",
+          "value": "lit-review-council",
+          "valueHint": "package"
+        }
+      ],
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "OPENROUTER_API_KEY",
+          "description": "OpenRouter API key for LLM access",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "GITHUB_TOKEN",
+          "description": "GitHub personal access token for practitioner track searches",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "TAVILY_API_KEY",
+          "description": "Tavily API key for web search",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "OPENALEX_API_KEY",
+          "description": "OpenAlex API key for academic search",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "ENG_MODEL",
+          "description": "Model for engineer agents (default: openrouter/moonshotai/kimi-k2.6)",
+          "isRequired": false
+        },
+        {
+          "name": "RESEARCH_MODEL",
+          "description": "Model for research agents (default: openrouter/z-ai/glm-5.1)",
+          "isRequired": false
+        },
+        {
+          "name": "JUDGE_MODEL",
+          "description": "Model for reviewer/synthesis agents (default: openrouter/deepseek/deepseek-v4-pro)",
+          "isRequired": false
+        }
+      ]
+    }
+  ],
+  "repository": {
+    "url": "https://github.com/Ravicha2/lit-review-council",
+    "source": "github"
+  }
+}

@@ -2,7 +2,9 @@
 
 A multi-agent literature review pipeline built with the [Google ADK](https://github.com/google/google-adk) (Agent Development Kit). It coordinates specialized agents to iteratively research sub-topics based on a YAML configuration. For each topic, it searches from academic and practitioner perspectives, evaluates the work through a peer review ensemble, and synthesizes a well-grounded report.
 
-Built as a capstone submission for the Kaggle "AI Agents: Intensive Vibe Coding Capstone".
+Built as a capstone submission for the Kaggle "[AI Agents: Intensive Vibe Coding Capstone](https://www.kaggle.com/competitions/vibecoding-agents-capstone-project/)".
+
+mcp-name: io.github.Ravicha2/lit-review-council
 
 ## Motivation
 
@@ -19,17 +21,31 @@ This pipeline addresses both:
 
 ## Setup & Installation
 
-### 1. Using the MCP Server (Recommended for Claude Desktop / AI Agents)
+Published to [PyPI](https://pypi.org/project/lit-review-council/) and the [MCP Registry](https://github.com/mcp). No clone or manual config needed.
 
-The server is published to PyPI as `lit-review-council`. You do not need to clone this repository to use it! `uvx` will automatically download and run it in an isolated environment.
+### 1. MCP Registry (Recommended, one command)
 
-**For Claude Desktop:**
+The server is listed on the MCP Registry, so installing is a single command. No JSON editing, no config files.
 
-1. Ensure you have [`uv`](https://docs.astral.sh/uv/) installed on your machine.
-2. Open your Claude Desktop configuration file:
-   - **Mac**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-3. Add the server to the `mcpServers` object and provide your API keys in the `env` block:
+**Claude Code:**
+
+```bash
+claude mcp add lit-review-council \
+  -e OPENROUTER_API_KEY=sk-or-your-key \
+  -e GITHUB_TOKEN=ghp_your-token \
+  -e TAVILY_API_KEY=tvly_your-key \
+  -- uvx lit-review-council
+```
+
+**VS Code:** Search for "lit-review-council" in the MCP Registry and click **Install**. Or open the [MCP Registry listing](https://github.com/mcp) and click **Install in VS Code**.
+
+**Any other MCP client:** See section 2 below.
+
+Once connected, the `lit_review_council_instructions` prompt is available to guide any AI agent through the full review workflow.
+
+### 2. Manual Config (Claude Desktop, Cursor, etc.)
+
+Add this to your client's MCP server config:
 
 ```json
 {
@@ -38,37 +54,41 @@ The server is published to PyPI as `lit-review-council`. You do not need to clon
       "command": "uvx",
       "args": ["lit-review-council"],
       "env": {
-        "OPENROUTER_API_KEY": "sk-or-your-api-key",
-        "GITHUB_TOKEN": "ghp_your-github-token",
-        "TAVILY_API_KEY": "tvly-your-tavily-key",
-        "OPENALEX_API_KEY": "your-openalex-key",
-        "ENG_MODEL": "openrouter/openai/gpt-5.5",
-        "RESEARCH_MODEL": "openrouter/google/gemini-3.5-flash",
-        "JUDGE_MODEL": "openrouter/anthropic/claude-sonnet-4.6"
+        "OPENROUTER_API_KEY": "sk-or-your-key",
+        "GITHUB_TOKEN": "ghp_your-token",
+        "TAVILY_API_KEY": "tvly_your-key",
+        "OPENALEX_API_KEY": "your-key"
       }
     }
   }
 }
 ```
 
-4. **Restart Claude Desktop**.
-5. In a new chat, simply ask Claude to: *"Conduct a literature review on [Topic]"*.
+| Client | Config path |
+|--------|-------------|
+| Claude Desktop (Mac) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Claude Desktop (Win) | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Cursor | `.cursor/mcp.json` |
 
-Once connected, your AI agent can natively fetch the `lit_review_council_instructions` prompt to understand exactly how to guide you through a structured literature review!
+### 3. Local Developer Setup
 
-### 2. Local Developer Setup (Manual / CLI Usage)
+```bash
+git clone https://github.com/Ravicha2/lit-review-council && cd lit-review-council
+cp .env.example .env   # fill in your keys
+uv run python main.py --config topics.yaml --output okf_output --question "Your Research Question"
+```
 
-If you want to run the pipeline manually via the terminal or develop the repository:
+### Environment Variables
 
-1. Clone the repository.
-2. Copy `.env.example` to `.env` and fill in your keys:
-   ```bash
-   cp .env.example .env
-   ```
-3. Run the orchestrator pipeline with a configuration file:
-   ```bash
-   uv run python main.py --config topics.yaml --output okf_output --question "Overarching Research Question"
-   ```
+| Variable | Purpose | Required |
+|----------|---------|----------|
+| `OPENROUTER_API_KEY` | LLM access via OpenRouter | Yes |
+| `GITHUB_TOKEN` | Practitioner track (GitHub search) | Yes |
+| `TAVILY_API_KEY` | Web search across both tracks | Yes |
+| `OPENALEX_API_KEY` | Academic track (OpenAlex API) | Yes |
+| `ENG_MODEL` | Model for engineer agents | No (default: `openrouter/moonshotai/kimi-k2.6`) |
+| `RESEARCH_MODEL` | Model for research agents | No (default: `openrouter/z-ai/glm-5.1`) |
+| `JUDGE_MODEL` | Model for reviewers & synthesis | No (default: `openrouter/deepseek/deepseek-v4-pro`) |
 
 ## Architecture
 
@@ -93,7 +113,7 @@ This prevents redundant searches and improves coherence across the final OKF bun
 
 ### Stage Breakdown
 
-```
+```ini
 Stage 0 (Orchestration)
 ├── Planner agent organizes YAML topics into Wave 1 (parallel) and Wave 2 (sequential)
 └── Distiller agent summarizes completed Wave 1 topics to provide prior context to Wave 2
@@ -134,10 +154,10 @@ All providers use tenacity retry with exponential backoff for 429/5xx errors.
 
 Every reference is classified into one of four tiers:
 
-- **peer_reviewed**: ArXiv preprints, ACM/IEEE papers, conference proceedings
-- **established_project**: GitHub repos with meaningful adoption (stars, active maintenance)
-- **vendor_doc**: Official documentation from a company/project
-- **blog_or_forum**: Medium, personal blogs, Stack Overflow, Reddit
+- __peer_reviewed__: ArXiv preprints, ACM/IEEE papers, conference proceedings
+- __established_project__: GitHub repos with meaningful adoption (stars, active maintenance)
+- __vendor_doc__: Official documentation from a company/project
+- __blog_or_forum__: Medium, personal blogs, Stack Overflow, Reddit
 
 The synthesis step warns when more than half of cited sources are blog_or_forum tier.
 
