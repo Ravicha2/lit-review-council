@@ -1,5 +1,7 @@
 # Multi-Agent Literature Review Pipeline
 
+![alt text](docs/project_logo.png)
+
 A multi-agent literature review pipeline built with the [Google ADK](https://github.com/google/google-adk) (Agent Development Kit). It coordinates specialized agents to iteratively research sub-topics based on a YAML configuration. For each topic, it searches from academic and practitioner perspectives, evaluates the work through a peer review ensemble, and synthesizes a well-grounded report.
 
 Built as a capstone submission for the Kaggle "[AI Agents: Intensive Vibe Coding Capstone](https://www.kaggle.com/competitions/vibecoding-agents-capstone-project/)".
