@@ -16,7 +16,7 @@ This pipeline addresses both:
 
 1. **Tiered Orchestration**: A Planner agent splits configured research topics into a multi-wave execution graph. Foundational concepts (Wave 1) run in parallel, and synthesis-dependent topics (Wave 2) run sequentially with distilled context from Wave 1.
 2. **Source Isolation**: Two independent tracks per topic, each with its own explorer (search) and reporter (write) agent. The academic track searches ArXiv, OpenAlex, and scholarly publishers. The practitioner track searches GitHub and engineering docs.
-3. **Peer Review Ensemble**: Three reviewers (Researcher, Engineer, Architect) evaluate anonymized reports. Borda-count voting aggregates rankings so no single reviewer dominates.
+3. **Peer Review Ensemble**: Three reviewers (Researcher, Engineer, Neutral) evaluate anonymized reports. Borda-count voting aggregates rankings so no single reviewer dominates.
 4. **Anti-Hallucination Guardrails**: The Synthesis agent's output is parsed and validated. Dangling citations like `(Author, Year)` or `[1]` are rejected. Every URL in the final report must exist in the original source references, or the run is retried (up to 2 times). A blog-tier ratio check warns when over 50% of sources are blog/forum tier.
 
 ## Setup & Installation
@@ -129,7 +129,7 @@ Stage 1 (Parallel Fan-out per Topic)
 Stage 2 (Peer Review Ensemble per Topic)
 ├── researcher_reviewer  → ranks anonymized reports (Researcher perspective)
 ├── engineer_reviewer    → ranks anonymized reports (Engineer perspective)
-└── architect_reviewer   → ranks anonymized reports (Architect perspective)
+└── technical_reviewer   → ranks anonymized reports (Neutral perspective)
     → Borda-count tally → winning report selected
 
 Stage 3 (Synthesis & Persistence)
