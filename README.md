@@ -87,7 +87,7 @@ uv run python main.py --config topics.yaml --output okf_output --question "Your 
 | `OPENROUTER_API_KEY` | LLM access via OpenRouter | Yes |
 | `GITHUB_TOKEN` | Practitioner track (GitHub search) | Yes |
 | `TAVILY_API_KEY` | Web search across both tracks | Yes |
-| `OPENALEX_API_KEY` | Academic track (OpenAlex API) | Yes |
+| `OPENALEX_API_KEY` | Academic track (OpenAlex API) | No |
 | `ENG_MODEL` | Model for engineer agents | No (default: `openrouter/moonshotai/kimi-k2.6`) |
 | `RESEARCH_MODEL` | Model for research agents | No (default: `openrouter/z-ai/glm-5.1`) |
 | `JUDGE_MODEL` | Model for reviewers & synthesis | No (default: `openrouter/deepseek/deepseek-v4-pro`) |
